@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, User, Lock, Mail, Phone, ChefHat } from 'lucide-react';
+import { registerUser, loginUser } from '../../api/api.js';
 
 const RestaurantAuth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,6 +13,7 @@ const RestaurantAuth = () => {
     password: '',
     confirmPassword: ''
   });
+  const [isLoading, setIsLoading] = useState(false); // Added loading state
 
   const handleInputChange = (e) => {
     setFormData({
@@ -20,14 +22,69 @@ const RestaurantAuth = () => {
     });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (isLogin) {
-      console.log('Login:', { email: formData.email, password: formData.password });
-    } else {
-      console.log('Register:', formData);
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsLoading(true);
+
+  if (isLogin) {
+    // Login
+    try {
+      const result = await loginUser({
+        email: formData.email,
+        password: formData.password,
+      });
+      if (result.token) {
+        localStorage.setItem("token", result.token);
+        alert("Đăng nhập thành công!");
+        console.log("Login result:", result);
+      } else {
+        alert(result.msg || "Đăng nhập thất bại");
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      alert("Có lỗi xảy ra khi đăng nhập");
     }
-  };
+  } else {
+    // Register
+    if (formData.password !== formData.confirmPassword) {
+      alert("Mật khẩu xác nhận không khớp");
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const result = await registerUser({
+        username: formData.name,
+        email: formData.email,
+        phone: formData.phone, // Lưu ý: phone không được lưu do schema
+        password: formData.password,
+        role: "customer",
+      });
+      console.log("Register API response:", result);
+
+      // Kiểm tra đăng ký thành công
+      if (result.username || result.email) {
+        alert("Đăng ký thành công!");
+        console.log("Register result:", result);
+        // Clear form
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          password: '',
+          confirmPassword: '',
+        });
+        setIsLogin(true); // Chuyển sang form đăng nhập
+      } else {
+        alert(result.msg || "Đăng ký thất bại");
+      }
+    } catch (err) {
+      console.error("Register error:", err);
+      alert(err.message || "Có lỗi xảy ra khi đăng ký");
+    }
+  }
+  setIsLoading(false);
+};
 
   const toggleForm = () => {
     setIsLogin(!isLogin);
@@ -99,7 +156,7 @@ const RestaurantAuth = () => {
             </div>
 
             {/* Form */}
-            <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {/* Name Field - Only for Register */}
               {!isLogin && (
                 <div className="animate-slide-in">
@@ -215,12 +272,15 @@ const RestaurantAuth = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in"
+                disabled={isLoading}
+                className={`w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in ${
+                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
                 style={{ animationDelay: !isLogin ? '0.5s' : '0.3s' }}
               >
-                {isLogin ? 'Đăng nhập' : 'Đăng ký'}
+                {isLoading ? 'Đang xử lý...' : isLogin ? 'Đăng nhập' : 'Đăng ký'}
               </button>
-            </div>
+            </form>
 
             {/* Toggle Text */}
             <div className="text-center mt-6 animate-slide-in" style={{ animationDelay: !isLogin ? '0.6s' : '0.4s' }}>

@@ -1,4 +1,4 @@
-import RestaurantAuth from "./components/Auth/Auth";
+import RestaurantAuth from "./components/Auth/Auth.jsx";
 
 function App() {
   return (
