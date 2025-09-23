@@ -23,68 +23,68 @@ const RestaurantAuth = () => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setIsLoading(true);
+    e.preventDefault();
+    setIsLoading(true);
 
-  if (isLogin) {
-    // Login
-    try {
-      const result = await loginUser({
-        email: formData.email,
-        password: formData.password,
-      });
-      if (result.token) {
-        localStorage.setItem("token", result.token);
-        alert("Đăng nhập thành công!");
-        console.log("Login result:", result);
-      } else {
-        alert(result.msg || "Đăng nhập thất bại");
-      }
-    } catch (err) {
-      console.error("Login error:", err);
-      alert("Có lỗi xảy ra khi đăng nhập");
-    }
-  } else {
-    // Register
-    if (formData.password !== formData.confirmPassword) {
-      alert("Mật khẩu xác nhận không khớp");
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const result = await registerUser({
-        username: formData.name,
-        email: formData.email,
-        phone: formData.phone, // Lưu ý: phone không được lưu do schema
-        password: formData.password,
-        role: "customer",
-      });
-      console.log("Register API response:", result);
-
-      // Kiểm tra đăng ký thành công
-      if (result.username || result.email) {
-        alert("Đăng ký thành công!");
-        console.log("Register result:", result);
-        // Clear form
-        setFormData({
-          name: '',
-          email: '',
-          phone: '',
-          password: '',
-          confirmPassword: '',
+    if (isLogin) {
+      // Login
+      try {
+        const result = await loginUser({
+          email: formData.email,
+          password: formData.password,
         });
-        setIsLogin(true); // Chuyển sang form đăng nhập
-      } else {
-        alert(result.msg || "Đăng ký thất bại");
+        if (result.token) {
+          localStorage.setItem("token", result.token);
+          alert("Đăng nhập thành công!");
+          console.log("Login result:", result);
+        } else {
+          alert(result.msg || "Đăng nhập thất bại");
+        }
+      } catch (err) {
+        console.error("Login error:", err);
+        alert("Có lỗi xảy ra khi đăng nhập");
       }
-    } catch (err) {
-      console.error("Register error:", err);
-      alert(err.message || "Có lỗi xảy ra khi đăng ký");
+    } else {
+      // Register
+      if (formData.password !== formData.confirmPassword) {
+        alert("Mật khẩu xác nhận không khớp");
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const result = await registerUser({
+          username: formData.name,
+          email: formData.email,
+          phone: formData.phone, // Lưu ý: phone không được lưu do schema
+          password: formData.password,
+          role: "customer",
+        });
+        console.log("Register API response:", result);
+
+        // Kiểm tra đăng ký thành công
+        if (result.username || result.email) {
+          alert("Đăng ký thành công!");
+          console.log("Register result:", result);
+          // Clear form
+          setFormData({
+            name: '',
+            email: '',
+            phone: '',
+            password: '',
+            confirmPassword: '',
+          });
+          setIsLogin(true); // Chuyển sang form đăng nhập
+        } else {
+          alert(result.msg || "Đăng ký thất bại");
+        }
+      } catch (err) {
+        console.error("Register error:", err);
+        alert(err.message || "Có lỗi xảy ra khi đăng ký");
+      }
     }
-  }
-  setIsLoading(false);
-};
+    setIsLoading(false);
+  };
 
   const toggleForm = () => {
     setIsLogin(!isLogin);
@@ -293,6 +293,13 @@ const RestaurantAuth = () => {
                   {isLogin ? 'Đăng ký ngay' : 'Đăng nhập'}
                 </button>
               </p>
+              {/* Anchor to Homepage */}
+              <a
+                href="/"
+                className="block mt-2 text-xs font-extralight text-orange-400 hover:text-orange-300 transition-colors"
+              >
+                Về lại trang chủ
+              </a>
             </div>
           </div>
         </div>
