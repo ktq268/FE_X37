@@ -53,7 +53,7 @@ const Footer = () => {
       </svg>
       {/* Copyright */}
       <div className="container mx-auto px-4 md:px-6 text-center mt-4">
-        <p className="text-sm text-white">© 2020 Maison de Flavor</p>
+        <p className="text-sm text-white">© 2020 Maison de Flavors</p>
       </div>
     </footer>
   );
