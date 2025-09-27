@@ -15,7 +15,7 @@ const Header = () => {
         <nav className="hidden md:flex space-x-8">
           <a href="/" className="hover:underline">Trang chủ</a>
           <a href="/menu" className="hover:underline">Menu</a>
-          <a href="/booking" className="hover:underline">Đặt bàn</a>
+         <Link to ="/booking"><a  className="hover:underline">Đặt bàn</a></Link> 
           <a href="/contact" className="hover:underline">Liên hệ</a>
         </nav>
         {/* Login and Cart */}
