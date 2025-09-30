@@ -1,218 +1,248 @@
-// BookingPage.jsx (Updated to work with fixed API)
-import React, { useState } from 'react';
-import { Calendar, MapPin, Users, User, Mail, Phone, Pen } from 'lucide-react';
-import Select from 'react-select';
-import { useNavigate } from 'react-router-dom';
-import { checkAvailableTables, createReservation } from "../api/api.js";
+// BookingPage.jsx (Đã sửa lỗi gọi API và giữ nguyên UI cũ)
+import React, { useState, useEffect, useMemo } from "react";
+import Header from "../components/Header/Header";
+import {
+  Calendar,
+  MapPin,
+  Users,
+  User,
+  Phone,
+  Pen,
+  Loader2,
+  Mail,
+  Globe,
+  ArrowLeft,
+} from "lucide-react";
+import Select from "react-select";
+import { useNavigate } from "react-router-dom";
+import {
+  checkAvailableTables,
+  createReservation,
+  getRestaurants,
+} from "../api/api.js";
+
+const regionOptions = [
+  { value: "south", label: "Miền Nam (Hồ Chí Minh,...) " },
+  { value: "north", label: "Miền Bắc (Hà Nội,...) " },
+  { value: "central", label: "Miền Trung (Đà Nẵng,...) " },
+];
 
 const BookingPage = () => {
   const [step, setStep] = useState(1);
   const [bookingDetails, setBookingDetails] = useState({
-    dateTime: '',
-    branch: '',
-    numberOfPeople: ''
+    dateTime: "",
+    restaurantId: "",
+    region: "south",
+    adults: "",
+    children: 0,
   });
+
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    note: ''
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    note: "",
   });
 
-  // availability results for branches when user requests "Tất cả chi nhánh"
-  const [availabilityResults, setAvailabilityResults] = useState({});
-  // store available tables for reservation
-  const [availableTables, setAvailableTables] = useState([]);
-  // store last params used to check availability to avoid stale results
-  const [lastAvailabilityCheck, setLastAvailabilityCheck] = useState({
-    dateTime: '',
-    numberOfPeople: ''
-  });
+  const [restaurantOptions, setRestaurantOptions] = useState([]);
+  const [availabilityResults, setAvailabilityResults] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedTableInfo, setSelectedTableInfo] = useState(null);
 
+  const navigate = useNavigate();
+
+  // --- LẤY DANH SÁCH CHI NHÁNH THEO MIỀN ---
+  useEffect(() => {
+    const fetchRestaurants = async () => {
+      if (!bookingDetails.region) {
+        setRestaurantOptions([]);
+        setBookingDetails((prev) => ({ ...prev, restaurantId: "" }));
+        return;
+      }
+
+      try {
+        const data = await getRestaurants({ region: bookingDetails.region });
+        const options = data.map((res) => ({
+          value: res._id,
+          label: `${res.name} (${res.address || "Chưa có địa chỉ"})`,
+          restaurantName: res.name,
+        }));
+        setRestaurantOptions(options);
+        if (!options.find((opt) => opt.value === bookingDetails.restaurantId)) {
+          setBookingDetails((prev) => ({ ...prev, restaurantId: "" }));
+        }
+      } catch (err) {
+        console.error("Lỗi khi lấy danh sách nhà hàng:", err);
+      }
+    };
+    fetchRestaurants();
+  }, [bookingDetails.region]);
+
+  // Tên/Địa chỉ chi nhánh đã chọn để hiển thị ở Step 2
+  const selectedRestaurantName = useMemo(() => {
+    const selected = restaurantOptions.find(
+      (opt) => opt.value === bookingDetails.restaurantId
+    );
+    if (selected) return selected.label;
+
+    const availableRes = availabilityResults.find(
+      (r) => r.restaurantId === bookingDetails.restaurantId
+    );
+    if (availableRes) return availableRes.restaurantName;
+
+    const selectedRegion = regionOptions.find(
+      (opt) => opt.value === bookingDetails.region
+    );
+    return selectedRegion
+      ? `Tất cả chi nhánh trong ${selectedRegion.label}`
+      : "Đang chọn...";
+  }, [
+    bookingDetails.restaurantId,
+    restaurantOptions,
+    availabilityResults,
+    bookingDetails.region,
+  ]);
+
+  // --- XỬ LÝ INPUTS & SELECTS (Giữ nguyên) ---
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (step === 1) {
       setBookingDetails((prev) => ({ ...prev, [name]: value }));
-      // clear availabilityResults if user changes date/time/people after a check
-      if (name === 'dateTime' || name === 'numberOfPeople') {
-        setAvailabilityResults({});
-        setAvailableTables([]);
-        setLastAvailabilityCheck({ dateTime: '', numberOfPeople: '' });
+      if (
+        name === "dateTime" ||
+        name === "adults" ||
+        name === "children" ||
+        name === "region"
+      ) {
+        setAvailabilityResults([]);
       }
     } else {
-      setFormData({ ...formData, [name]: value });
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
-  const handleBranchChange = (selectedOption) => {
-    setBookingDetails((prev) => ({ ...prev, branch: selectedOption ? selectedOption.value : '' }));
-    // clear availability results if switching away from "tat-ca-chi-nhanh"
-    setAvailabilityResults({});
-    setAvailableTables([]);
-    setLastAvailabilityCheck({ dateTime: '', numberOfPeople: '' });
+  const handleRegionChange = (selectedOption) => {
+    setBookingDetails((prev) => ({
+      ...prev,
+      region: selectedOption ? selectedOption.value : "",
+      restaurantId: "",
+    }));
+    setAvailabilityResults([]);
   };
 
-  // Helper function to check availability for a single branch
-  const checkAvailabilitySingle = async (branchValue, dateTime, numberOfPeople) => {
-    try {
-      const token = localStorage.getItem("token");
-      const result = await checkAvailableTables({
-        date: dateTime,
-        time: dateTime,
-        guestCount: numberOfPeople,
-        branch: branchValue,
-      }, token);
-      return result.success;
-    } catch (err) {
-      console.error(err);
-      return false;
-    }
+  const handleRestaurantChange = (selectedOption) => {
+    setBookingDetails((prev) => ({
+      ...prev,
+      restaurantId: selectedOption ? selectedOption.value : "",
+    }));
+    setAvailabilityResults([]);
   };
 
-  const handleNextStep = async (e) => {
+  // --- STEP 1: KIỂM TRA BÀN TRỐNG (CHECK AVAILABILITY) ---
+  const handleCheckAvailability = async (e) => {
     e.preventDefault();
 
-    if (!bookingDetails.dateTime || !bookingDetails.numberOfPeople) {
-      alert("Vui lòng chọn ngày/giờ và số lượng khách trước.");
+    if (
+      !bookingDetails.dateTime ||
+      !bookingDetails.adults ||
+      bookingDetails.adults < 1 ||
+      !bookingDetails.region
+    ) {
+      alert("Vui lòng chọn ngày/giờ, số lượng khách (người lớn) và Miền.");
       return;
     }
 
     const token = localStorage.getItem("token");
     if (!token) {
-      alert("Vui lòng đăng nhập để tiếp tục.");
+      alert("Vui lòng đăng nhập để kiểm tra bàn trống.");
       return;
     }
 
-    // Nếu chọn 1 chi nhánh cụ thể
-    if (bookingDetails.branch && bookingDetails.branch !== "tat-ca-chi-nhanh") {
-      try {
-        const result = await checkAvailableTables(
-          {
-            date: bookingDetails.dateTime,
-            time: bookingDetails.dateTime,
-            guestCount: bookingDetails.numberOfPeople,
-            branch: bookingDetails.branch,
-          },
-          token
-        );
+    setIsLoading(true);
+    setAvailabilityResults([]);
 
-        if (!result.success) {
-          alert("Xin lỗi, chi nhánh không còn bàn trống: " + (result.message || ""));
-          return;
-        }
-
-        // Store available tables for reservation
-        setAvailableTables(result.data || []);
-        setStep(2);
-      } catch (err) {
-        console.error(err);
-        alert("Lỗi khi kiểm tra bàn trống");
-      }
-      return;
-    }
-
-    // Nếu chọn "Tất cả chi nhánh"
-    if (bookingDetails.branch === "tat-ca-chi-nhanh") {
-      try {
-        const branches = ["quan-1", "quan-3"];
-        const results = {};
-        for (const b of branches) {
-          const r = await checkAvailableTables(
-            {
-              date: bookingDetails.dateTime,
-              time: bookingDetails.dateTime,
-              guestCount: bookingDetails.numberOfPeople,
-              branch: b,
-            },
-            token
-          );
-          results[b] = r.success;
-        }
-        setAvailabilityResults(results);
-        setLastAvailabilityCheck({
-          dateTime: bookingDetails.dateTime,
-          numberOfPeople: bookingDetails.numberOfPeople,
-        });
-      } catch (err) {
-        console.error(err);
-        alert("Lỗi khi kiểm tra chi nhánh");
-      }
-      return;
-    }
-
-    alert('Vui lòng chọn chi nhánh hoặc "Tất cả chi nhánh" để tiếp tục.');
-  };
-
-  // Called when user clicks the small "Tiếp tục" button next to a branch in the list
-  const handleSelectBranchFromList = async (branchValue) => {
-    // ensure date/time and numberOfPeople are present
-    if (!bookingDetails.dateTime || !bookingDetails.numberOfPeople) {
-      alert('Vui lòng chọn ngày/giờ và số lượng khách trước khi chọn chi nhánh.');
-      return;
-    }
-
-    // If availabilityResults are stale or absent, re-check single branch
-    const paramsChanged =
-      lastAvailabilityCheck.dateTime !== bookingDetails.dateTime ||
-      lastAvailabilityCheck.numberOfPeople !== bookingDetails.numberOfPeople;
-
-    let isAvailable = availabilityResults[branchValue];
-    if (isAvailable === undefined || paramsChanged) {
-      isAvailable = await checkAvailabilitySingle(branchValue, bookingDetails.dateTime, bookingDetails.numberOfPeople);
-    }
-
-    if (!isAvailable) {
-      alert('Chi nhánh này hiện không khả dụng cho yêu cầu của bạn.');
-      return;
-    }
-
-    // Get available tables for this branch
-    const token = localStorage.getItem("token");
     try {
-      const result = await checkAvailableTables({
-        date: bookingDetails.dateTime,
-        time: bookingDetails.dateTime,
-        guestCount: bookingDetails.numberOfPeople,
-        branch: branchValue,
-      }, token);
-      
-      if (result.success) {
-        setAvailableTables(result.data || []);
+      const [date, time] = bookingDetails.dateTime.split("T");
+
+      // **ĐÃ SỬA:** Chuẩn bị data object để gửi qua body (POST)
+      const data = {
+        region: bookingDetails.region,
+        date: date,
+        time: time,
+        adults: parseInt(bookingDetails.adults),
+        children: parseInt(bookingDetails.children),
+      };
+
+      if (bookingDetails.restaurantId) {
+        data.restaurantId = bookingDetails.restaurantId;
+      }
+
+      const result = await checkAvailableTables(data, token); // Gọi POST /api/available-tables
+
+      setAvailabilityResults(result.availableRestaurants || []);
+
+      if (
+        !result.availableRestaurants ||
+        result.availableRestaurants.length === 0
+      ) {
+        alert("Xin lỗi, không còn bàn trống phù hợp với yêu cầu của bạn.");
       }
     } catch (err) {
       console.error(err);
+      alert("Lỗi khi kiểm tra bàn trống: " + err.message); // Hiển thị lỗi từ API nếu có
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- CHUYỂN SANG STEP 2 (Giữ nguyên) ---
+  const handleSelectRestaurantAndContinue = (restaurantId, availableTables) => {
+    const tableToReserve = availableTables[0];
+    if (!tableToReserve || !tableToReserve.tableId) {
+      // Backend trả về tableId
+      alert("Thông tin bàn bị thiếu. Vui lòng thử lại.");
+      return;
     }
 
-    // OK: set chosen branch and go to step 2
-    setBookingDetails((prev) => ({ ...prev, branch: branchValue }));
+    setBookingDetails((prev) => ({ ...prev, restaurantId: restaurantId }));
+    setSelectedTableInfo(tableToReserve);
     setStep(2);
   };
 
-  const navigate = useNavigate();
+  // --- STEP 2: XỬ LÝ SUBMIT (TẠO BOOKING) (Giữ nguyên) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
 
+    if (!selectedTableInfo || !bookingDetails.restaurantId || !token) {
+      alert(
+        "Thông tin đặt bàn hoặc đăng nhập bị thiếu. Vui lòng kiểm tra lại."
+      );
+      return;
+    }
+
+    const [date, time] = bookingDetails.dateTime.split("T");
+
     try {
       const res = await createReservation(
         {
-          date: bookingDetails.dateTime,
-          time: bookingDetails.dateTime,
-          guestCount: bookingDetails.numberOfPeople,
-          branch: bookingDetails.branch,
+          restaurantId: bookingDetails.restaurantId,
+          tableId: selectedTableInfo.tableId, // Gửi tableId đã chọn
+          date: date,
+          time: time,
+          adults: parseInt(bookingDetails.adults),
+          children: parseInt(bookingDetails.children),
           customerName: `${formData.firstName} ${formData.lastName}`,
           customerPhone: formData.phone,
           customerEmail: formData.email,
           note: formData.note,
-          // Let backend auto-select available table
-          tableId: availableTables.length > 0 ? availableTables[0]._id : null,
         },
         token
       );
 
-      if (res.success) {
-        alert("Đặt bàn thành công!");
+      if (res && res._id) {
+        alert("Đặt bàn thành công! Mã đặt bàn của bạn: " + res._id);
         navigate("/booking-success");
       } else {
         alert("Đặt bàn thất bại: " + (res.message || "Unknown error"));
@@ -223,92 +253,106 @@ const BookingPage = () => {
     }
   };
 
-  // Options cho chi nhánh (chỉ Quận 1 & Quận 3 + Tất cả)
-  const branchOptions = [
-    { value: 'quan-1', label: 'Quận 1, TP HCM' },
-    { value: 'quan-3', label: 'Quận 3, TP HCM' },
-    { value: 'tat-ca-chi-nhanh', label: 'Tất cả chi nhánh' }
-  ];
-
-  // Custom styles cho React Select
+  // --- Custom styles cho React Select (Giữ nguyên) ---
   const customSelectStyles = {
     control: (provided, state) => ({
       ...provided,
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      borderColor: 'rgba(255, 255, 255, 0.2)',
-      borderRadius: '0.5rem',
-      color: 'white',
-      minHeight: '3rem',
-      paddingLeft: '2.75rem',
-      boxShadow: state.isFocused ? '0 0 0 2px rgba(251, 146, 60, 0.5)' : 'none',
-      '&:hover': {
-        borderColor: 'rgba(255, 255, 255, 0.3)',
+      backgroundColor: "rgba(255, 255, 255, 0.1)",
+      borderColor: "rgba(255, 255, 255, 0.2)",
+      borderRadius: "0.5rem",
+      color: "white",
+      minHeight: "3rem",
+      paddingLeft: "2.75rem",
+      boxShadow: state.isFocused ? "0 0 0 2px rgba(251, 146, 60, 0.5)" : "none",
+      "&:hover": {
+        borderColor: "rgba(255, 255, 255, 0.3)",
       },
     }),
     option: (provided, state) => ({
       ...provided,
       backgroundColor: state.isSelected
-        ? 'rgba(251, 146, 60, 0.2)'
+        ? "rgba(251, 146, 60, 0.2)"
         : state.isFocused
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'transparent',
-      color: 'white',
-      '&:hover': {
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        ? "rgba(255, 255, 255, 0.1)"
+        : "transparent",
+      color: "white",
+      "&:hover": {
+        backgroundColor: "rgba(255, 255, 255, 0.1)",
       },
     }),
     placeholder: (provided) => ({
       ...provided,
-      color: 'rgba(255, 255, 255, 0.6)',
+      color: "rgba(255, 255, 255, 0.6)",
     }),
     singleValue: (provided) => ({
       ...provided,
-      color: 'white',
+      color: "white",
     }),
     menu: (provided) => ({
       ...provided,
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      border: '1px solid rgba(255, 255, 255, 0.2)',
+      backgroundColor: "rgba(0, 0, 0, 0.8)",
+      border: "1px solid rgba(255, 255, 255, 0.2)",
     }),
     input: (provided) => ({
       ...provided,
-      color: 'white',
+      color: "white",
     }),
     indicatorSeparator: (provided) => ({
       ...provided,
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
     }),
     dropdownIndicator: (provided) => ({
       ...provided,
-      color: 'white',
+      color: "white",
     }),
   };
 
+  // --- JSX TEMPLATE (Giữ nguyên UI) ---
   return (
     <div className="min-h-screen relative overflow-hidden bg-gray-900">
       {/* Background */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1505576399279-565b52d4ac71?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')`
+          backgroundImage: `url('https://images.unsplash.com/photo-1505576399279-565b52d4ac71?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80')`,
         }}
       >
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/70"></div>
       </div>
 
-      {/* Main */}
+      {/* Header */}
+      <div className="relative z-10 ">
+        <Header />
+      </div>
+
+      {/* Main Content */}
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
           <div className="text-center mb-8 animate-fade-in">
             <h1 className="text-4xl font-bold text-white mb-2">Đặt bàn</h1>
-            <p className="text-gray-300">Đặt bàn ngay để trải nghiệm ẩm thực đỉnh cao</p>
+            <p className="text-gray-300">
+              Đặt bàn ngay để trải nghiệm ẩm thực đỉnh cao
+            </p>
           </div>
 
           <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl shadow-2xl p-6 border border-white border-opacity-20">
             {step === 1 ? (
-              <form onSubmit={handleNextStep} className="space-y-6">
-                <h2 className="text-2xl font-semibold text-white mb-4">Chọn thông tin đặt bàn</h2>
+              <form onSubmit={handleCheckAvailability} className="space-y-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="p-2 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-orange-300 transition"
+                    aria-label="Quay lại trang chủ"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <h2 className="text-2xl font-semibold text-white">
+                    Chọn thông tin đặt bàn
+                  </h2>
+                </div>
 
+                {/* Input: Ngày/giờ (Giữ nguyên) */}
                 <div className="relative animate-slide-in">
                   <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
@@ -321,111 +365,183 @@ const BookingPage = () => {
                   />
                 </div>
 
-                <div className="relative animate-slide-in" style={{ animationDelay: '0.2s' }}>
+                {/* SELECT: MIỀN (REGION) */}
+                <div
+                  className="relative animate-slide-in"
+                  style={{ animationDelay: "0.05s" }}
+                >
+                  <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 z-10" />
+                  <Select
+                    name="region"
+                    value={regionOptions.find(
+                      (option) => option.value === bookingDetails.region
+                    )}
+                    onChange={handleRegionChange}
+                    options={regionOptions}
+                    placeholder="Chọn Miền (Bắc/Trung/Nam)"
+                    styles={customSelectStyles}
+                    required
+                  />
+                </div>
+
+                {/* SELECT: CHI NHÁNH (RESTAURANT) */}
+                <div
+                  className="relative animate-slide-in"
+                  style={{ animationDelay: "0.1s" }}
+                >
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 z-10" />
+                  <Select
+                    name="restaurantId"
+                    value={restaurantOptions.find(
+                      (option) => option.value === bookingDetails.restaurantId
+                    )}
+                    onChange={handleRestaurantChange}
+                    options={restaurantOptions}
+                    placeholder={
+                      restaurantOptions.length > 0
+                        ? "Chọn Chi nhánh (Tùy chọn)"
+                        : "Đang tải chi nhánh..."
+                    }
+                    styles={customSelectStyles}
+                    isDisabled={restaurantOptions.length === 0}
+                  />
+                </div>
+
+                {/* SỐ LƯỢNG KHÁCH (NGƯỜI LỚN) */}
+                <div
+                  className="relative animate-slide-in"
+                  style={{ animationDelay: "0.2s" }}
+                >
                   <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="number"
-                    name="numberOfPeople"
-                    value={bookingDetails.numberOfPeople}
+                    name="adults"
+                    value={bookingDetails.adults}
                     onChange={handleInputChange}
-                    placeholder="Số lượng khách"
+                    placeholder="Số lượng khách (Người lớn)"
                     className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
                     min="1"
                     required
                   />
                 </div>
 
-                <div className="relative animate-slide-in" style={{ animationDelay: '0.1s' }}>
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 z-10" />
-                  <Select
-                    name="branch"
-                    value={branchOptions.find(option => option.value === bookingDetails.branch)}
-                    onChange={handleBranchChange}
-                    options={branchOptions}
-                    placeholder="Chọn chi nhánh"
-                    styles={customSelectStyles}
-                    isSearchable={false}
-                    classNamePrefix="react-select"
+                {/* SỐ LƯỢNG KHÁCH (TRẺ EM) */}
+                <div
+                  className="relative animate-slide-in"
+                  style={{ animationDelay: "0.25s" }}
+                >
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="number"
+                    name="children"
+                    value={bookingDetails.children}
+                    onChange={handleInputChange}
+                    placeholder="Số lượng trẻ em (tùy chọn)"
+                    className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                    min="0"
                   />
                 </div>
 
-                {/* Nếu user chọn "Tất cả chi nhánh" và đã bấm kiểm tra */}
-                {bookingDetails.branch === 'tat-ca-chi-nhanh' && (
-                  <div className="bg-white bg-opacity-5 p-4 rounded-lg border border-white border-opacity-20 text-white space-y-3 animate-slide-in">
-                    <h3 className="text-lg font-semibold">Các chi nhánh khả dụng:</h3>
-
-                    {Object.keys(availabilityResults).length === 0 ? (
-                      <p className="text-gray-300 text-sm">
-                        Vui lòng nhập đầy đủ các thông tin yêu cầu để được hiển thị chi nhánh khả dụng
-                      </p>
-                    ) : (
-                      <ul className="space-y-2 text-gray-300 text-sm">
-                        {[
-                          { value: 'quan-1', label: 'Quận 1' },
-                          { value: 'quan-3', label: 'Quận 3' }
-                        ].map((b) => {
-                          const available = !!availabilityResults[b.value];
-                          return (
-                            <li key={b.value} className="flex items-center justify-between">
-                              <span>
-                                Chi nhánh {b.label}:{" "}
-                                {available ? (
-                                  <span className="text-green-400">Available</span>
-                                ) : (
-                                  <span className="text-red-400">Unavailable</span>
-                                )}
-                              </span>
-
-                              <button
-                                type="button"
-                                onClick={() => handleSelectBranchFromList(b.value)}
-                                disabled={!available}
-                                className={`py-1 px-3 text-xs font-medium rounded-lg shadow-md transform transition-all duration-200 ${
-                                  available
-                                    ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white'
-                                    : 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                                }`}
-                              >
-                                {available ? 'Tiếp tục' : 'Không khả dụng'}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
+                {/* BUTTON: KIỂM TRA BÀN TRỐNG */}
                 <button
                   type="submit"
-                  className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in"
-                  style={{ animationDelay: '0.3s' }}
+                  disabled={isLoading}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in flex justify-center items-center"
+                  style={{ animationDelay: "0.3s" }}
                 >
-                  Tiếp tục
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang kiểm tra...
+                    </>
+                  ) : (
+                    "Kiểm tra bàn trống"
+                  )}
                 </button>
 
-                <a
-                  href="/"
-                  className="block mt-2 text-xs font-extralight text-orange-400 hover:text-orange-300 transition-colors text-center"
-                >
-                  Về lại trang chủ
-                </a>
+                {/* HIỂN THỊ KẾT QUẢ TÌM KIẾM */}
+                {availabilityResults.length > 0 && (
+                  <div className="bg-white bg-opacity-5 p-4 rounded-lg border border-white border-opacity-20 text-white space-y-3 animate-slide-in">
+                    <h3 className="text-lg font-semibold">
+                      Kết quả tìm kiếm bàn trống:
+                    </h3>
+
+                    <ul className="space-y-2 text-gray-300 text-sm">
+                      {availabilityResults.map((res) => (
+                        <li
+                          key={res.restaurantId}
+                          className="flex items-center justify-between border-b border-white border-opacity-10 pb-2"
+                        >
+                          <span className="flex-1">
+                            Chi nhánh {res.restaurantName}:{" "}
+                            <span className="text-green-400 font-bold">
+                              {res.tables.length} bàn trống
+                            </span>
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleSelectRestaurantAndContinue(
+                                res.restaurantId,
+                                res.tables
+                              )
+                            }
+                            className="py-1 px-3 text-xs font-medium rounded-lg shadow-md transform transition-all duration-200 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"
+                          >
+                            Đặt bàn tại đây
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </form>
             ) : (
+              // --- Giao diện Step 2 (Xác nhận) ---
               <form onSubmit={handleSubmit} className="space-y-6">
-                <h2 className="text-2xl font-semibold text-white mb-4">Xác nhận thông tin đặt bàn</h2>
-                <div className="text-gray-300 mb-4 space-y-1">
-                  <p>Ngày giờ: {bookingDetails.dateTime}</p>
-                  <p>Chi nhánh: {bookingDetails.branch || 'Chưa chọn'}</p>
-                  <p>Số lượng khách: {bookingDetails.numberOfPeople}</p>
-                  {availableTables.length > 0 && (
-                    <p className="text-green-400">
-                      Bàn khả dụng: {availableTables.length} bàn
-                    </p>
-                  )}
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="p-2 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 hover:text-orange-300 transition"
+                    aria-label="Quay lại trang chủ"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <h2 className="text-2xl font-semibold text-white">
+                    Xác nhận thông tin đặt bàn
+                  </h2>
+                </div>
+                <div className="text-gray-300 mb-4 space-y-1 p-3 bg-white bg-opacity-5 rounded-lg border border-white border-opacity-20">
+                  <p>
+                    <span className="font-semibold">Chi nhánh:</span>{" "}
+                    {selectedRestaurantName}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Ngày giờ:</span>{" "}
+                    {bookingDetails.dateTime.replace("T", " ")}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Số lượng khách:</span>{" "}
+                    {bookingDetails.adults} người lớn +{" "}
+                    {bookingDetails.children} trẻ em
+                  </p>
+                  <p className="text-green-400">
+                    Sẽ được đặt: 1 bàn phù hợp (Tự động chọn:{" "}
+                    {selectedTableInfo?.tableNumber
+                      ? `Bàn số ${selectedTableInfo.tableNumber}`
+                      : "Đã chọn"}
+                    )
+                  </p>
                 </div>
 
+                {/* THÔNG TIN KHÁCH HÀNG (Giữ nguyên) */}
+                <h3 className="text-xl font-semibold text-white mt-8 mb-4">
+                  Thông tin của bạn
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Tên */}
                   <div className="relative animate-slide-in">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
@@ -433,24 +549,48 @@ const BookingPage = () => {
                       name="firstName"
                       value={formData.firstName}
                       onChange={handleInputChange}
-                      placeholder="Họ"
+                      placeholder="Tên"
                       className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
                       required
                     />
                   </div>
-                  <div className="relative animate-slide-in" style={{ animationDelay: '0.1s' }}>
+                  {/* Họ */}
+                  <div
+                    className="relative animate-slide-in"
+                    style={{ animationDelay: "0.1s" }}
+                  >
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
                       type="text"
                       name="lastName"
                       value={formData.lastName}
                       onChange={handleInputChange}
+                      placeholder="Họ"
+                      className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                      required
+                    />
+                  </div>
+                  {/* Email */}
+                  <div
+                    className="relative animate-slide-in"
+                    style={{ animationDelay: "0.2s" }}
+                  >
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
                       placeholder="Email"
                       className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
                       required
                     />
                   </div>
-                  <div className="relative animate-slide-in" style={{ animationDelay: '0.3s' }}>
+                  {/* Phone */}
+                  <div
+                    className="relative animate-slide-in"
+                    style={{ animationDelay: "0.3s" }}
+                  >
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                     <input
                       type="tel"
@@ -462,33 +602,37 @@ const BookingPage = () => {
                       required
                     />
                   </div>
-
-                  <div className="relative animate-slide-in md:col-span-2" style={{ animationDelay: '0.4s' }}>
-                    <Pen className="absolute left-3 top-1/4 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <textarea
-                      name="note"
-                      value={formData.note}
-                      onChange={handleInputChange}
-                      placeholder="Ghi chú (nếu có)"
-                      className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm h-24 resize-none"
-                    />
-                  </div>
                 </div>
+                {/* Ghi chú */}
+                <div
+                  className="relative animate-slide-in"
+                  style={{ animationDelay: "0.4s" }}
+                >
+                  <Pen className="absolute left-3 top-4 w-5 h-5 text-gray-400" />
+                  <textarea
+                    name="note"
+                    value={formData.note}
+                    onChange={handleInputChange}
+                    placeholder="Ghi chú (nếu có)"
+                    className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm h-24 resize-none"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="w-full py-3 px-4 bg-gray-500 hover:bg-gray-600 text-white font-medium rounded-lg shadow-lg mb-4 transition-all duration-300"
+                >
+                  Quay lại
+                </button>
 
                 <button
                   type="submit"
                   className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in"
-                  style={{ animationDelay: '0.5s' }}
+                  style={{ animationDelay: "0.5s" }}
                 >
-                  Đặt bàn
+                  Hoàn tất Đặt bàn
                 </button>
-
-                <a
-                  href="/"
-                  className="block mt-2 text-xs font-extralight text-orange-400 hover:text-orange-300 transition-colors text-center"
-                >
-                  Về lại trang chủ
-                </a>
               </form>
             )}
           </div>
@@ -498,4 +642,4 @@ const BookingPage = () => {
   );
 };
 
-export default BookingPage; 
+export default BookingPage;
