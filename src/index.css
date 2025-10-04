@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom Swiper Pagination Styles */
+.swiper-custom .swiper-pagination {
+  position: relative !important;
+  margin-top: 2rem !important;
+  bottom: 0 !important;
+}
+
+.swiper-custom .swiper-pagination-bullet {
+  background-color: #fb923c !important;
+  opacity: 0.5 !important;
+  width: 12px !important;
+  height: 12px !important;
+  margin: 0 4px !important;
+}
+
+.swiper-custom .swiper-pagination-bullet-active {
+  background-color: #ea580c !important;
+  opacity: 1 !important;
+}

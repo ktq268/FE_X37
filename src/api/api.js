@@ -1,47 +1,61 @@
-import axios from "axios";
-
 // api.js (Đã sửa đổi hoàn chỉnh)
-const API_URL = "http://localhost:3000/api";
+const API_URL = "http://localhost:3000";
 
-// Hàm tiện ích để gọi API (Giữ nguyên)
+// Hàm tiện ích để gọi API (Đã cải thiện error handling)
 async function request(endpoint, options = {}, token = null) {
   const headers = {
     "Content-Type": "application/json",
     ...(token && { "x-auth-token": token }),
   };
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const url = `${API_URL}${endpoint}`;
+  console.log(`API Request: ${options.method || "GET"} ${url}`);
 
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(
-      error.message || `API request failed: ${res.status} ${res.statusText}`
-    );
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    console.log(`API Response: ${res.status} ${res.statusText}`);
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      console.error("API Error:", error);
+      throw new Error(
+        error.message || `API request failed: ${res.status} ${res.statusText}`
+      );
+    }
+
+    const data = await res.json();
+    console.log("API Success:", data);
+    return data;
+  } catch (error) {
+    console.error("API Request Error:", error);
+    throw error;
   }
-
-  return res.json();
 }
 
 // --- AUTH (Giữ nguyên) ---
 export async function registerUser(data) {
-  return request("/auth/register", {
+  return request("/api/auth/register", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
 export async function loginUser(data) {
-  return request("/auth/login", { method: "POST", body: JSON.stringify(data) });
+  return request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 // --- RESTAURANTS (Lấy danh sách chi nhánh theo vùng) (Giữ nguyên GET) ---
 // Endpoint: GET /api/restaurants?region=...
 export async function getRestaurants(query = {}) {
   const params = new URLSearchParams(query).toString();
-  return request(`/restaurants${params ? `?${params}` : ""}`);
+  return request(`/api/restaurants${params ? `?${params}` : ""}`);
 }
 
 // --- TABLES (Tìm bàn trống) ---
@@ -50,7 +64,7 @@ export async function getRestaurants(query = {}) {
 export async function checkAvailableTables(data, token) {
   // data là object { region, restaurantId?, date, time, adults, children? }
   return request(
-    "/available-tables", // Không dùng query string
+    "/api/available-tables", // Không dùng query string
     {
       method: "POST",
       body: JSON.stringify(data),
@@ -63,7 +77,7 @@ export async function checkAvailableTables(data, token) {
 // Endpoint: POST /api/bookings
 export async function createReservation(data, token) {
   return request(
-    "/bookings",
+    "/api/bookings",
     { method: "POST", body: JSON.stringify(data) },
     token
   );
@@ -71,28 +85,22 @@ export async function createReservation(data, token) {
 
 // --- OTHER (Giữ nguyên) ---
 export async function getReservations(token) {
-  return request("/bookings", { method: "GET" }, token);
+  return request("/api/bookings", { method: "GET" }, token);
 }
 
 // --- MENU (Lấy danh sách món ăn) ---
-// Lấy danh sách món ăn (search, filter, pagination)
-export async function getMenuItems({ q, tag, page = 1, limit = 20 } = {}) {
-  const res = await axios.get(`${API_URL}/menu/items`, {
-    params: { q, tag, page, limit },
-  });
-  return res.data; // { items: [...], pagination: {...} }
+// Lấy danh sách món ăn (search, filter)
+export async function getMenuItems({ q, tag } = {}) {
+  const params = new URLSearchParams({ q, tag }).toString();
+  return request(`/api/menu/items${params ? `?${params}` : ""}`);
 }
 
 // Lấy chi tiết 1 món ăn
 export async function getMenuItemDetail(id) {
-  const res = await axios.get(`${API_URL}/menu/items/${id}`);
-  return res.data; // { ...itemDetail }
+  return request(`/api/menu/items/${id}`);
 }
 
-// Lấy menu đầy đủ (group theo category)
-export async function getFullMenu({ page = 1, limit = 20 } = {}) {
-  const res = await axios.get(`${API_URL}/menu/full`, {
-    params: { page, limit },
-  });
-  return res.data; // [ { category, items: [...] }, ... ]
+// Lấy menu đầy đủ (group theo category) - không có pagination
+export async function getFullMenu() {
+  return request(`/api/menu/full`);
 }

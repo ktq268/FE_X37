@@ -11,14 +11,14 @@ import {
 import { getMenuItems, getMenuItemDetail, getFullMenu } from "../api/api";
 import Header from "../components/Header/Header";
 import Footer from "../components/Footer/Footer";
+import { Swiper, SwiperSlide } from "swiper/react";
+import "swiper/css";
 
 export default function MenuPage() {
   const [fullMenu, setFullMenu] = useState([]); // menu group theo category
   const [items, setItems] = useState([]); // kết quả search
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
-  const [page, setPage] = useState(1);
-  const [limit] = useState(9);
   const [isLoading, setIsLoading] = useState(false);
 
   // Helper: cố gắng lấy URL ảnh từ các field phổ biến
@@ -33,12 +33,12 @@ export default function MenuPage() {
     );
   };
 
-  // load menu đầy đủ khi vào page
+  // load menu đầy đủ khi vào page (không pagination)
   useEffect(() => {
     async function load() {
       setIsLoading(true);
       try {
-        const data = await getFullMenu({ page, limit });
+        const data = await getFullMenu(); // Load tất cả món
         setFullMenu(data);
       } catch (err) {
         console.error("Load full menu failed", err);
@@ -47,7 +47,7 @@ export default function MenuPage() {
       }
     }
     load();
-  }, [page, limit]);
+  }, []);
 
   // tìm kiếm món ăn
   async function handleSearch(e) {
@@ -58,7 +58,7 @@ export default function MenuPage() {
     }
     setIsLoading(true);
     try {
-      const data = await getMenuItems({ q: searchTerm, page: 1, limit: 9 });
+      const data = await getMenuItems({ q: searchTerm });
       setItems(data.items);
     } catch (err) {
       console.error("Search failed", err);
@@ -144,43 +144,61 @@ export default function MenuPage() {
                 Xóa tìm kiếm
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Swiper
+              spaceBetween={24}
+              slidesPerView={1}
+              breakpoints={{
+                640: {
+                  slidesPerView: 2,
+                },
+                1024: {
+                  slidesPerView: 3,
+                },
+              }}
+              className="w-full swiper-custom"
+            >
               {items.map((item) => (
-                <div
-                  key={item._id}
-                  className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
-                >
-                  <div className="h-48 relative">
-                    {getItemImage(item) ? (
-                      <img
-                        src={getItemImage(item)}
-                        alt={item.name}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center">
-                        <ChefHat className="w-16 h-16 text-orange-400" />
+                <SwiperSlide key={item._id}>
+                  <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 h-full">
+                    <div className="h-48 relative">
+                      {getItemImage(item) ? (
+                        <img
+                          src={getItemImage(item)}
+                          alt={item.name}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center">
+                          <ChefHat className="w-16 h-16 text-orange-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-6 flex flex-col h-full">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="text-xl font-bold text-gray-800 flex-1">
+                          {item.name}
+                        </h3>
+                        <span className="text-lg font-bold text-orange-500 ml-2 whitespace-nowrap">
+                          {item.price
+                            ? item.price.toLocaleString("vi-VN")
+                            : "N/A"}{" "}
+                          VNĐ
+                        </span>
                       </div>
-                    )}
+                      <div className="mt-auto">
+                        <button
+                          onClick={() => handleViewDetail(item._id)}
+                          className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 rounded-lg hover:from-orange-600 hover:to-red-600 transition-all duration-300 font-medium"
+                        >
+                          Xem chi tiết
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-6">
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">
-                      {item.name}
-                    </h3>
-                    <p className="text-2xl font-bold text-orange-500 mb-4">
-                      {item.price.amount} {item.price.currency}
-                    </p>
-                    <button
-                      onClick={() => handleViewDetail(item._id)}
-                      className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 rounded-lg hover:from-orange-600 hover:to-red-600 transition-all duration-300 font-medium"
-                    >
-                      Xem chi tiết
-                    </button>
-                  </div>
-                </div>
+                </SwiperSlide>
               ))}
-            </div>
+            </Swiper>
           </div>
         ) : (
           // Full Menu by Categories
@@ -193,69 +211,63 @@ export default function MenuPage() {
                   </h2>
                   <div className="w-24 h-1 bg-gradient-to-r from-orange-500 to-red-500 mx-auto rounded-full"></div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <Swiper
+                  spaceBetween={24}
+                  slidesPerView={1}
+                  breakpoints={{
+                    640: {
+                      slidesPerView: 2,
+                    },
+                    1024: {
+                      slidesPerView: 3,
+                    },
+                  }}
+                  className="w-full swiper-custom"
+                >
                   {group.items.map((item) => (
-                    <div
-                      key={item._id}
-                      className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group"
-                    >
-                      <div className="h-48 relative overflow-hidden">
-                        {getItemImage(item) ? (
-                          <img
-                            src={getItemImage(item)}
-                            alt={item.name}
-                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
-                            <ChefHat className="w-16 h-16 text-orange-400" />
+                    <SwiperSlide key={item._id}>
+                      <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group h-full">
+                        <div className="h-48 relative overflow-hidden">
+                          {getItemImage(item) ? (
+                            <img
+                              src={getItemImage(item)}
+                              alt={item.name}
+                              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                              <ChefHat className="w-16 h-16 text-orange-400" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-6 flex flex-col h-full">
+                          <div className="flex justify-between items-start mb-2">
+                            <h3 className="text-xl font-bold text-gray-800 flex-1">
+                              {item.name}
+                            </h3>
+                            <span className="text-lg font-bold text-orange-500 ml-2 whitespace-nowrap">
+                              {item.price
+                                ? item.price.toLocaleString("vi-VN")
+                                : "N/A"}{" "}
+                              VNĐ
+                            </span>
                           </div>
-                        )}
+                          <div className="mt-auto">
+                            <button
+                              onClick={() => handleViewDetail(item._id)}
+                              className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 rounded-lg hover:from-orange-600 hover:to-red-600 transition-all duration-300 font-medium"
+                            >
+                              Xem chi tiết
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="p-6">
-                        <h3 className="text-xl font-bold text-gray-800 mb-2">
-                          {item.name}
-                        </h3>
-                        <p className="text-2xl font-bold text-orange-500 mb-4">
-                          {item.price.amount} {item.price.currency}
-                        </p>
-                        <button
-                          onClick={() => handleViewDetail(item._id)}
-                          className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 rounded-lg hover:from-orange-600 hover:to-red-600 transition-all duration-300 font-medium"
-                        >
-                          Xem chi tiết
-                        </button>
-                      </div>
-                    </div>
+                    </SwiperSlide>
                   ))}
-                </div>
+                </Swiper>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Pagination cho full menu */}
-        {items.length === 0 && fullMenu.length > 0 && (
-          <div className="flex justify-center gap-4 mt-12">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 rounded-lg shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Trang trước
-            </button>
-            <span className="flex items-center px-4 py-3 bg-orange-500 text-white rounded-lg font-medium">
-              {page}
-            </span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
-            >
-              Trang tiếp
-              <ArrowLeft className="w-4 h-4 rotate-180" />
-            </button>
           </div>
         )}
       </div>
@@ -293,7 +305,10 @@ export default function MenuPage() {
                 </p>
                 <div className="flex items-center justify-between mb-6">
                   <div className="text-3xl font-bold text-orange-500">
-                    {selectedItem.price.amount} {selectedItem.price.currency}
+                    {selectedItem.price
+                      ? selectedItem.price.toLocaleString("vi-VN")
+                      : "N/A"}{" "}
+                    VNĐ
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     <div className="flex items-center gap-1">
