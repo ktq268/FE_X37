@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus } from '../api/api.js';
-import { Clock, Users, ChefHat, CheckCircle, AlertCircle, Printer, CreditCard, Wallet, QrCode, X, Filter, Lock, Unlock, Edit, Eye } from 'lucide-react';
+import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings } from '../api/api.js';
+import { Clock, Users, ChefHat, CheckCircle, AlertCircle, Printer, CreditCard, Wallet, QrCode, X, Filter, Lock, Unlock, Edit, Eye, Bell } from 'lucide-react';
+import NotificationsPage from './NotificationsPage.jsx';
 
 const staffPage = () => {
   const [currentPage, setCurrentPage] = useState('orders');
@@ -49,7 +50,7 @@ const staffPage = () => {
       id: booking._id || booking.id || booking.code || '',
       bookingId: booking._id || booking.id || '',
       customerName: booking.customerName || booking.name || 'Khách lẻ',
-      tableNumber: booking.tableNumber || (booking.table && booking.table.number) || (currentOrdersTable && currentOrdersTable.number) || '',
+      tableNumber: booking.tableNumber || (booking.table && booking.table.tableNumber) || (currentOrdersTable && currentOrdersTable.tableNumber) || '',
       createdAt: booking.createdAtClient || booking.createdAt || '',
       items: items.map(it => ({
         name: it.name || it.itemName || '',
@@ -67,7 +68,9 @@ const staffPage = () => {
     setLoadingTables(true);
     setErrorMessage('');
     try {
+      console.log('Fetching tables with query:', query, 'token:', token ? 'present' : 'missing');
       const data = await getTables(query, token);
+      console.log('Tables API response:', data);
       setTables(Array.isArray(data) ? data : (data?.tables || []));
       if (!currentOrdersTable && (Array.isArray(data) ? data.length : (data?.tables || []).length)) {
         const list = Array.isArray(data) ? data : data.tables;
@@ -76,6 +79,7 @@ const staffPage = () => {
         await refreshOrdersForTable(first);
       }
     } catch (e) {
+      console.error('Error fetching tables:', e);
       setErrorMessage(e.message || 'Không tải được danh sách bàn');
     } finally {
       setLoadingTables(false);
@@ -87,7 +91,7 @@ const staffPage = () => {
     setLoadingOrders(true);
     setErrorMessage('');
     try {
-      const res = await getBookingsByTable(table._id || table.id || table.number, {}, token);
+      const res = await getBookingsByTable(table.id || table._id || table.tableNumber, {}, token);
       const list = Array.isArray(res) ? res : (res?.bookings || []);
       setOrders(list.map(mapBookingToOrder));
     } catch (e) {
@@ -111,7 +115,8 @@ const staffPage = () => {
 
   const tableStatusConfig = {
     available: { label: 'Trống', color: 'bg-green-500', textColor: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-300' },
-    blocked: { label: 'Đã đặt', color: 'bg-yellow-500', textColor: 'text-yellow-700', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-300' },
+    reserved: { label: 'Đã đặt', color: 'bg-blue-500', textColor: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-300' },
+    blocked: { label: 'Khóa', color: 'bg-yellow-500', textColor: 'text-yellow-700', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-300' },
     occupied: { label: 'Đang dùng', color: 'bg-red-500', textColor: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-300' }
   };
 
@@ -129,11 +134,27 @@ const staffPage = () => {
 
   const changeTableStatus = async (tableNumber, newStatus, customerInfo = null) => {
     try {
-      const table = tables.find(t => t.number === tableNumber);
-      if (!table) return;
-      await updateTableStatusById(table._id || table.id, newStatus, token);
+      // Tìm bàn theo số bàn
+      const table = tables.find(t => String(t.tableNumber) === String(tableNumber));
+      if (!table) {
+        throw new Error(`Không tìm thấy bàn số ${tableNumber}`);
+      }
+      
+      console.log('Changing table status:', { tableNumber, newStatus, tableId: table.id, table });
+      
+      // Kiểm tra table.id có tồn tại không
+      if (!table.id) {
+        throw new Error(`Table ID không tồn tại cho bàn số ${tableNumber}`);
+      }
+      
+      // Sử dụng id của bàn để cập nhật
+      await updateTableStatusById(table.id, newStatus, token);
+      
+      // Refresh lại danh sách bàn
       await refreshTables({});
-      if (currentOrdersTable && currentOrdersTable.number === tableNumber) {
+      
+      // Nếu đang xem orders của bàn này thì refresh lại orders
+      if (currentOrdersTable && String(currentOrdersTable.tableNumber) === String(tableNumber)) {
         await refreshOrdersForTable(table);
       }
     } catch (e) {
@@ -243,10 +264,10 @@ const staffPage = () => {
             <div className="text-gray-500 text-sm">Không có bàn</div>
           ) : (
             tables.map(table => {
-              const config = tableStatusConfig[table.status];
+              const config = tableStatusConfig[table.status] || tableStatusConfig['available'];
               return (
                 <div 
-                  key={table.number}
+                  key={table.id || table._id || `table-${table.tableNumber}`}
                   onClick={async () => {
                     setSelectedTable(table);
                     setShowTableModal(true);
@@ -255,16 +276,30 @@ const staffPage = () => {
                   }}
                   className={`border-2 ${config.borderColor} rounded-lg p-3 ${config.bgColor} text-center cursor-pointer hover:shadow-lg transition-all`}
                 >
-                  <div className="font-bold text-lg mb-1">Bàn {table.number}</div>
+                  <div className="font-bold text-lg mb-1">Bàn {table.tableNumber}</div>
                   <div className={`text-xs ${config.textColor} font-medium mb-1`}>{config.label}</div>
-                  {table.checkInTime && (
-                    <div className="text-xs text-gray-600">{table.checkInTime}</div>
+                  
+                  {/* Hiển thị thông tin booking */}
+                  {table.status === 'reserved' && table.blockedBy && (
+                    <div className="text-xs text-blue-600 font-medium">
+                      📋 {table.blockedBy}
+                    </div>
                   )}
-                  {table.blockedBy && (
-                    <div className="text-xs text-gray-600 mt-1">🔒 {table.blockedBy.split('-')[0]}</div>
+                  
+                  {table.status === 'occupied' && table.checkInTime && (
+                    <div className="text-xs text-red-600 font-medium">
+                      👥 {table.checkInTime}
+                    </div>
                   )}
+                  
+                  {table.status === 'blocked' && table.blockedBy && (
+                    <div className="text-xs text-yellow-600 font-medium">
+                      🔒 {table.blockedBy}
+                    </div>
+                  )}
+                  
                   {table.orderId && (
-                    <div className="text-xs text-blue-600 font-medium mt-1">{table.orderId}</div>
+                    <div className="text-xs text-purple-600 font-medium mt-1">#{table.orderId}</div>
                   )}
                 </div>
               );
@@ -310,7 +345,6 @@ const staffPage = () => {
                 </div>
               </div>
             </div>
-            
             <div className="bg-white border rounded-lg p-4">
               <h3 className="font-bold mb-3 text-sm">Danh sách món</h3>
               <div className="space-y-2">
@@ -424,7 +458,7 @@ const staffPage = () => {
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-lg max-w-md w-full">
           <div className="border-b p-4 flex justify-between items-center">
-            <h3 className="text-xl font-bold">Bàn số {selectedTable.number}</h3>
+            <h3 className="text-xl font-bold">Bàn số {selectedTable.tableNumber}</h3>
             <button onClick={() => setShowTableModal(false)} className="text-gray-500 hover:text-gray-700">
               <X size={24} />
             </button>
@@ -433,12 +467,35 @@ const staffPage = () => {
           <div className="p-4 space-y-4">
             <div className="bg-gray-50 p-3 rounded-lg">
               <div className="text-sm text-gray-600 mb-1">Trạng thái hiện tại:</div>
-              <div className="font-bold text-lg">{tableStatusConfig[selectedTable.status].label}</div>
-              {selectedTable.blockedBy && (
-                <div className="text-sm text-gray-600 mt-1">🔒 {selectedTable.blockedBy}</div>
+              <div className="font-bold text-lg">{(tableStatusConfig[selectedTable.status] || tableStatusConfig['available']).label}</div>
+              
+              {/* Hiển thị thông tin booking chi tiết */}
+              {selectedTable.status === 'reserved' && selectedTable.blockedBy && (
+                <div className="mt-2 p-2 bg-blue-50 rounded border-l-4 border-blue-400">
+                  <div className="text-sm font-medium text-blue-800">📋 Thông tin đặt bàn:</div>
+                  <div className="text-sm text-blue-700">{selectedTable.blockedBy}</div>
+                </div>
               )}
+              
+              {selectedTable.status === 'occupied' && selectedTable.checkInTime && (
+                <div className="mt-2 p-2 bg-red-50 rounded border-l-4 border-red-400">
+                  <div className="text-sm font-medium text-red-800">👥 Khách đang dùng từ:</div>
+                  <div className="text-sm text-red-700">{selectedTable.checkInTime}</div>
+                </div>
+              )}
+              
+              {selectedTable.status === 'blocked' && selectedTable.blockedBy && (
+                <div className="mt-2 p-2 bg-yellow-50 rounded border-l-4 border-yellow-400">
+                  <div className="text-sm font-medium text-yellow-800">🔒 Lý do khóa:</div>
+                  <div className="text-sm text-yellow-700">{selectedTable.blockedBy}</div>
+                </div>
+              )}
+              
               {selectedTable.orderId && (
-                <div className="text-sm text-blue-600 mt-1 font-medium">{selectedTable.orderId}</div>
+                <div className="mt-2 p-2 bg-purple-50 rounded border-l-4 border-purple-400">
+                  <div className="text-sm font-medium text-purple-800">🍽️ Order ID:</div>
+                  <div className="text-sm text-purple-700">#{selectedTable.orderId}</div>
+                </div>
               )}
             </div>
             
@@ -447,10 +504,11 @@ const staffPage = () => {
               
               <button
                 onClick={() => {
-                  changeTableStatus(selectedTable.number, 'available');
+                  changeTableStatus(selectedTable.tableNumber, 'available');
                   setShowTableModal(false);
                 }}
                 className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
+                disabled={selectedTable.status === 'available'}
               >
                 <Unlock size={20} />
                 Đặt trạng thái TRỐNG
@@ -458,18 +516,19 @@ const staffPage = () => {
               
               <button
                 onClick={() => {
-                  changeTableStatus(selectedTable.number, 'occupied');
+                  changeTableStatus(selectedTable.tableNumber, 'occupied');
                   setShowTableModal(false);
                 }}
                 className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                disabled={selectedTable.status === 'blocked'}
+                disabled={selectedTable.status === 'occupied' || selectedTable.status === 'blocked'}
               >
                 <Users size={20} />
                 Khách đang dùng
               </button>
               
               <div className="border-t pt-3">
-                <h4 className="font-bold mb-2">Đặt bàn trước:</h4>
+                <h4 className="font-bold mb-2 text-blue-600">📋 Đặt bàn cho khách</h4>
+                <p className="text-sm text-gray-600 mb-3">Sử dụng khi khách gọi điện hoặc đến trực tiếp đặt bàn</p>
                 <input
                   type="text"
                   placeholder="Tên khách hàng"
@@ -487,19 +546,51 @@ const staffPage = () => {
                 <button
                   onClick={() => {
                     if (customerName && reservationTime) {
-                      changeTableStatus(selectedTable.number, 'blocked', `${customerName} - ${reservationTime}`);
+                      changeTableStatus(selectedTable.tableNumber, 'reserved', `${customerName} - ${reservationTime}`);
                       setShowTableModal(false);
                       setCustomerName('');
                       setReservationTime('');
                     }
                   }}
-                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                  disabled={!customerName || !reservationTime}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
+                  disabled={!customerName || !reservationTime || selectedTable.status === 'blocked'}
                 >
-                  <Lock size={20} />
-                  Đặt bàn
+                  <CheckCircle size={20} />
+                  Đặt bàn cho khách
                 </button>
               </div>
+              
+              <div className="border-t pt-3">
+                <h4 className="font-bold mb-2 text-yellow-600">🔒 Khóa bàn tạm thời</h4>
+                <p className="text-sm text-gray-600 mb-3">Sử dụng khi bàn cần bảo trì hoặc có vấn đề</p>
+                <button
+                  onClick={() => {
+                    changeTableStatus(selectedTable.tableNumber, 'blocked', 'Bảo trì');
+                    setShowTableModal(false);
+                  }}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
+                  disabled={selectedTable.status === 'blocked'}
+                >
+                  <Lock size={20} />
+                  Khóa bàn tạm thời
+                </button>
+              </div>
+              
+              {selectedTable.status === 'blocked' && (
+                <div className="border-t pt-3">
+                  <h4 className="font-bold mb-2 text-red-600">Bàn đã bị khóa</h4>
+                  <button
+                    onClick={() => {
+                      changeTableStatus(selectedTable.tableNumber, 'available');
+                      setShowTableModal(false);
+                    }}
+                    className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
+                  >
+                    <Unlock size={20} />
+                    Mở khóa bàn
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -617,6 +708,7 @@ const staffPage = () => {
           {currentPage === 'orders' && <OrdersPage />}
           {currentPage === 'tables' && <TablesPage />}
           {currentPage === 'invoice' && <InvoicePage />}
+          {currentPage === 'notifications' && <NotificationsPage />}
         </div>
       </div>
 
@@ -639,6 +731,15 @@ const staffPage = () => {
           >
             <Users size={24} />
             <span className="text-xs font-medium">Bàn</span>
+          </button>
+          <button
+            onClick={() => setCurrentPage('notifications')}
+            className={`flex-1 py-4 flex flex-col items-center gap-1 transition ${
+              currentPage === 'notifications' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Bell size={24} />
+            <span className="text-xs font-medium">Thông báo</span>
           </button>
           <button
             onClick={() => {
