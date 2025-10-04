@@ -1,5 +1,7 @@
+import axios from "axios";
+
 // api.js (Đã sửa đổi hoàn chỉnh)
-const API_URL = "https://be-x37-eight.vercel.app/api";
+const API_URL = "http://localhost:3000/api";
 
 // Hàm tiện ích để gọi API (Giữ nguyên)
 async function request(endpoint, options = {}, token = null) {
@@ -70,4 +72,27 @@ export async function createReservation(data, token) {
 // --- OTHER (Giữ nguyên) ---
 export async function getReservations(token) {
   return request("/bookings", { method: "GET" }, token);
+}
+
+// --- MENU (Lấy danh sách món ăn) ---
+// Lấy danh sách món ăn (search, filter, pagination)
+export async function getMenuItems({ q, tag, page = 1, limit = 20 } = {}) {
+  const res = await axios.get(`${API_URL}/menu/items`, {
+    params: { q, tag, page, limit },
+  });
+  return res.data; // { items: [...], pagination: {...} }
+}
+
+// Lấy chi tiết 1 món ăn
+export async function getMenuItemDetail(id) {
+  const res = await axios.get(`${API_URL}/menu/items/${id}`);
+  return res.data; // { ...itemDetail }
+}
+
+// Lấy menu đầy đủ (group theo category)
+export async function getFullMenu({ page = 1, limit = 20 } = {}) {
+  const res = await axios.get(`${API_URL}/menu/full`, {
+    params: { page, limit },
+  });
+  return res.data; // [ { category, items: [...] }, ... ]
 }
