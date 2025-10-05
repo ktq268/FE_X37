@@ -1,8 +1,34 @@
-import React from 'react';
-import { ChefHat, User, ShoppingCart } from 'lucide-react'; 
-import {Link} from 'react-router-dom'
+import React, { useState, useEffect } from 'react';
+import { ChefHat, User, ShoppingCart, LogOut } from 'lucide-react'; 
+import {Link, useNavigate} from 'react-router-dom'
 
 const Header = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1] || ''));
+        setUserInfo(payload.user || payload);
+        setIsAuthenticated(true);
+      } catch (e) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    setIsAuthenticated(false);
+    setUserInfo(null);
+    navigate('/');
+  };
+
   return (
     <header className="bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 shadow-lg">
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
@@ -23,10 +49,20 @@ const Header = () => {
           <a href="/cart" className="hover:text-yellow-200">
             <ShoppingCart className="w-6 h-6" />
           </a>
-          <Link to="/auth" className="flex items-center bg-white text-orange-500 px-4 py-2 rounded-lg hover:bg-gray-100">
-  <User className="w-5 h-5 mr-2" />
-  Đăng nhập
-</Link>
+          {isAuthenticated ? (
+            <button 
+              onClick={handleLogout}
+              className="flex items-center bg-white text-orange-500 px-4 py-2 rounded-lg hover:bg-gray-100"
+            >
+              <LogOut className="w-5 h-5 mr-2" />
+              Đăng xuất
+            </button>
+          ) : (
+            <Link to="/auth" className="flex items-center bg-white text-orange-500 px-4 py-2 rounded-lg hover:bg-gray-100">
+              <User className="w-5 h-5 mr-2" />
+              Đăng nhập
+            </Link>
+          )}
         </div>
       </div>
     </header>

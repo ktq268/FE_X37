@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings } from '../api/api.js';
-import { Clock, Users, ChefHat, CheckCircle, AlertCircle, Printer, CreditCard, Wallet, QrCode, X, Filter, Lock, Unlock, Edit, Eye, Bell } from 'lucide-react';
+import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings, getRestaurants } from '../api/api.js';
+import { Clock, Users, ChefHat, CheckCircle, AlertCircle, Printer, CreditCard, Wallet, QrCode, X, Filter, Lock, Unlock, Edit, Eye, Bell, MapPin, Building, LogOut, RefreshCw,} from 'lucide-react';
 import NotificationsPage from './NotificationsPage.jsx';
 
 const staffPage = () => {
@@ -18,6 +18,16 @@ const staffPage = () => {
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [currentOrdersTable, setCurrentOrdersTable] = useState(null);
+
+  // Restaurant and staff info
+  const [restaurants, setRestaurants] = useState([]);
+  const [selectedRegion, setSelectedRegion] = useState('');
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+  const [staffInfo, setStaffInfo] = useState(null);
+  const [currentDateTime, setCurrentDateTime] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedTime, setSelectedTime] = useState(new Date().toTimeString().slice(0, 5));
+  const [selectedBooking, setSelectedBooking] = useState(null);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
@@ -64,27 +74,77 @@ const staffPage = () => {
     };
   };
 
-  const refreshTables = async (query = {}) => {
-    setLoadingTables(true);
-    setErrorMessage('');
-    try {
-      console.log('Fetching tables with query:', query, 'token:', token ? 'present' : 'missing');
-      const data = await getTables(query, token);
-      console.log('Tables API response:', data);
-      setTables(Array.isArray(data) ? data : (data?.tables || []));
-      if (!currentOrdersTable && (Array.isArray(data) ? data.length : (data?.tables || []).length)) {
-        const list = Array.isArray(data) ? data : data.tables;
-        const first = list[0];
-        setCurrentOrdersTable(first);
-        await refreshOrdersForTable(first);
+  const loadStaffInfo = () => {
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1] || ''));
+        setStaffInfo(payload.user || payload);
+      } catch (e) {
+        console.error('Error parsing token:', e);
       }
-    } catch (e) {
-      console.error('Error fetching tables:', e);
-      setErrorMessage(e.message || 'Không tải được danh sách bàn');
-    } finally {
-      setLoadingTables(false);
     }
   };
+
+  const updateDateTime = () => {
+    const now = new Date();
+    const options = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    };
+    setCurrentDateTime(now.toLocaleDateString('vi-VN', options));
+  };
+
+  const loadRestaurants = async () => {
+    try {
+      const data = await getRestaurants({}, token);
+      setRestaurants(Array.isArray(data) ? data : (data?.restaurants || []));
+    } catch (e) {
+      console.error('Error loading restaurants:', e);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    window.location.href = '/';
+  };
+
+  // Hàm load bàn
+const refreshTables = async (query = {}) => {
+  setLoadingTables(true);
+  setErrorMessage('');
+
+  try {
+    const queryWithTime = {
+      ...query,
+      date: query.date || selectedDate,
+      time: query.time || selectedTime
+    };
+
+    console.log('Fetching tables with query:', queryWithTime, 'token:', token ? 'present' : 'missing');
+
+    const data = await getTables(queryWithTime, token);
+    console.log('Tables API response:', data);
+
+    setTables(Array.isArray(data) ? data : (data?.tables || []));
+    if (!currentOrdersTable && (Array.isArray(data) ? data.length : (data?.tables || []).length)) {
+      const list = Array.isArray(data) ? data : data.tables;
+      const first = list[0];
+      setCurrentOrdersTable(first);
+      await refreshOrdersForTable(first);
+    }
+  } catch (e) {
+    console.error('Error fetching tables:', e);
+    setErrorMessage(e.message || 'Không tải được danh sách bàn');
+  } finally {
+    setLoadingTables(false);
+  }
+};
+
 
   const refreshOrdersForTable = async (table) => {
     if (!table) return;
@@ -103,7 +163,14 @@ const staffPage = () => {
   };
 
   useEffect(() => {
+    loadStaffInfo();
+    updateDateTime();
+    loadRestaurants();
     refreshTables({});
+    
+    // Update time every minute
+    const interval = setInterval(updateDateTime, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const statusConfig = {
@@ -118,6 +185,54 @@ const staffPage = () => {
     reserved: { label: 'Đã đặt', color: 'bg-blue-500', textColor: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-300' },
     blocked: { label: 'Khóa', color: 'bg-yellow-500', textColor: 'text-yellow-700', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-300' },
     occupied: { label: 'Đang dùng', color: 'bg-red-500', textColor: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-300' }
+  };
+
+  const CompactOrderCard = ({ order }) => {
+    if (!order) return null;
+    
+    const config = statusConfig[order.status] || statusConfig['pending'];
+    const items = order.items || [];
+    const total = order.total || 0;
+    
+    return (
+      <div 
+        onClick={() => {
+          setSelectedOrder(order);
+          setShowOrderDetailModal(true);
+        }}
+        className={`border-2 ${config.borderColor} rounded-lg p-3 ${config.bgColor} hover:shadow-lg transition-all cursor-pointer min-w-[280px]`}
+      >
+        <div className="flex justify-between items-start mb-2">
+          <div>
+            <h3 className="font-bold text-base">#{order.id || 'N/A'}</h3>
+            <div className="text-xs text-gray-600 flex items-center gap-1">
+              <span>Bàn {order.tableNumber || 'N/A'}</span>
+              <span>•</span>
+              <span>{order.createdAt || 'N/A'}</span>
+            </div>
+          </div>
+          <div className={`${config.color} text-white px-2 py-1 rounded text-xs font-medium`}>
+            {config.label}
+          </div>
+        </div>
+        
+        <div className="text-xs mb-2 space-y-1">
+          {items.slice(0, 2).map((item, idx) => (
+            <div key={idx} className="flex justify-between">
+              <span className="truncate">{item.quantity || 0}x {item.name || 'N/A'}</span>
+            </div>
+          ))}
+          {items.length > 2 && (
+            <div className="text-gray-500 italic">+{items.length - 2} món khác</div>
+          )}
+        </div>
+        
+        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+          <div className="font-bold text-sm">{total.toLocaleString()}đ</div>
+          <Eye size={16} className="text-gray-400" />
+        </div>
+      </div>
+    );
   };
 
   const updateOrderStatus = async (orderId, newStatus) => {
@@ -166,52 +281,85 @@ const staffPage = () => {
     ? orders 
     : orders.filter(order => order.status === filterStatus);
 
-  const CompactOrderCard = ({ order }) => {
-    const config = statusConfig[order.status];
+  const handleRegionChange = async (region) => {
+    setSelectedRegion(region);
+    setSelectedRestaurant(null);
+    setTables([]);
     
-    return (
-      <div 
-        onClick={() => {
-          setSelectedOrder(order);
-          setShowOrderDetailModal(true);
-        }}
-        className={`border-2 ${config.borderColor} rounded-lg p-3 ${config.bgColor} hover:shadow-lg transition-all cursor-pointer min-w-[280px]`}
-      >
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <h3 className="font-bold text-base">#{order.id}</h3>
-            <div className="text-xs text-gray-600 flex items-center gap-1">
-              <span>Bàn {order.tableNumber}</span>
-              <span>•</span>
-              <span>{order.createdAt}</span>
-            </div>
-          </div>
-          <div className={`${config.color} text-white px-2 py-1 rounded text-xs font-medium`}>
-            {config.label}
-          </div>
-        </div>
+    if (region) {
+      try {
+        // Load restaurants for the selected region
+        const data = await getRestaurants({ region }, token);
+        const regionRestaurants = Array.isArray(data) ? data : (data?.restaurants || []);
         
-        <div className="text-xs mb-2 space-y-1">
-          {order.items.slice(0, 2).map((item, idx) => (
-            <div key={idx} className="flex justify-between">
-              <span className="truncate">{item.quantity}x {item.name}</span>
-            </div>
-          ))}
-          {order.items.length > 2 && (
-            <div className="text-gray-500 italic">+{order.items.length - 2} món khác</div>
-          )}
-        </div>
-        
-        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-          <div className="font-bold text-sm">{order.total.toLocaleString()}đ</div>
-          <Eye size={16} className="text-gray-400" />
-        </div>
-      </div>
-    );
+        if (regionRestaurants.length > 0) {
+          setSelectedRestaurant(regionRestaurants[0]);
+          refreshTables({ restaurantId: regionRestaurants[0]._id || regionRestaurants[0].id });
+        }
+      } catch (e) {
+        console.error('Error loading restaurants for region:', e);
+        setErrorMessage('Không thể tải danh sách chi nhánh cho miền này');
+      }
+    }
   };
+
+  const handleRestaurantChange = (restaurantId) => {
+    const restaurant = restaurants.find(r => (r._id || r.id) === restaurantId);
+    setSelectedRestaurant(restaurant);
+    refreshTables({ restaurantId });
+  };
+
+  const handleDateTimeChange = () => {
+    refreshTables(selectedRestaurant ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id } : {});
+  };
+
+  const getUniqueRegions = () => {
+    return [
+      { value: "south", label: "Miền Nam (Hồ Chí Minh,...)" },
+      { value: "north", label: "Miền Bắc (Hà Nội,...)" },
+      { value: "central", label: "Miền Trung (Đà Nẵng,...)" }
+    ];
+  };
+
+  const getRestaurantsByRegion = () => {
+    return selectedRegion ? restaurants.filter(r => r.region === selectedRegion) : [];
+  };
+
+  const handleBookingSelect = (booking) => {
+    setSelectedBooking(booking);
+  };
+
 
   const OrdersPage = () => (
     <div className="h-full flex flex-col">
+      {/* Header Information */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Building className="w-6 h-6" />
+              {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
+            </h1>
+            <p className="text-blue-100 text-sm mt-1">
+              {currentDateTime}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm text-blue-100">Nhân viên</p>
+              <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Đăng xuất
+            </button>
+          </div>
+        </div>
+      </div>
+
       {errorMessage && (
         <div className="mb-3 p-3 rounded border border-red-300 bg-red-50 text-red-700 text-sm">
           {errorMessage}
@@ -219,17 +367,30 @@ const staffPage = () => {
       )}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Danh sách Order</h2>
-        <select 
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="border rounded-lg px-3 py-1 text-sm bg-white"
-        >
-          <option value="all">Tất cả</option>
-          <option value="pending">Chờ xác nhận</option>
-          <option value="preparing">Đang chế biến</option>
-          <option value="served">Đã phục vụ</option>
-          <option value="completed">Hoàn tất</option>
-        </select>
+        <div className="flex items-center gap-3">
+          <select 
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="border rounded-lg px-3 py-1 text-sm bg-white"
+          >
+            <option value="all">Tất cả</option>
+            <option value="pending">Chờ xác nhận</option>
+            <option value="preparing">Đang chế biến</option>
+            <option value="served">Đã phục vụ</option>
+            <option value="completed">Hoàn tất</option>
+          </select>
+          <button 
+            onClick={() => {
+              if (currentOrdersTable) {
+                refreshOrdersForTable(currentOrdersTable);
+              }
+            }}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Làm mới
+          </button>
+        </div>
       </div>
       
       {loadingOrders ? (
@@ -250,12 +411,132 @@ const staffPage = () => {
 
   const TablesPage = () => (
     <div className="h-full flex flex-col">
+      {/* Header Information */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Building className="w-6 h-6" />
+              {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
+            </h1>
+            <p className="text-blue-100 text-sm mt-1">
+              {currentDateTime}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm text-blue-100">Nhân viên</p>
+              <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Đăng xuất
+            </button>
+          </div>
+        </div>
+      </div>
+
       {errorMessage && (
         <div className="mb-3 p-3 rounded border border-red-300 bg-red-50 text-red-700 text-sm">
           {errorMessage}
         </div>
       )}
-      <h2 className="text-xl font-bold mb-4">Quản lý Bàn</h2>
+      
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Quản lý Bàn</h2>
+        <button 
+          onClick={() => refreshTables(selectedRestaurant ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id } : {})}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Làm mới
+        </button>
+      </div>
+      
+      {/* Restaurant Filter */}
+      <div className="bg-white border rounded-lg p-4 mb-4">
+        <h3 className="font-semibold mb-3 flex items-center gap-2">
+          <Filter className="w-5 h-5" />
+          Lọc theo chi nhánh và thời gian
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Miền</label>
+            <select
+              value={selectedRegion}
+              onChange={(e) => handleRegionChange(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              <option value="">Chọn miền</option>
+              {getUniqueRegions().map(region => (
+                <option key={region.value} value={region.value}>{region.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Chi nhánh</label>
+            <select
+              value={selectedRestaurant?._id || selectedRestaurant?.id || ''}
+              onChange={(e) => handleRestaurantChange(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+              disabled={!selectedRegion}
+            >
+              <option value="">Chọn chi nhánh</option>
+              {getRestaurantsByRegion().map(restaurant => (
+                <option key={restaurant._id || restaurant.id} value={restaurant._id || restaurant.id}>
+                  {restaurant.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Ngày</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                const newDate = e.target.value;
+                setSelectedDate(newDate);
+                refreshTables({
+                  restaurantId: selectedRestaurant?._id || selectedRestaurant?.id,
+                  date: newDate,
+                  time: selectedTime   // dùng selectedTime hiện tại
+                });
+              }}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Giờ</label>
+            <input
+              type="time"
+              value={selectedTime}
+              onChange={(e) => {
+                const newTime = e.target.value;
+                setSelectedTime(newTime);
+                refreshTables({
+                  restaurantId: selectedRestaurant?._id || selectedRestaurant?.id,
+                  date: selectedDate, // dùng selectedDate hiện tại
+                  time: newTime
+                });
+              }}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+            />
+          </div>
+        </div>
+        {selectedRestaurant && (
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-2 text-blue-800">
+              <MapPin className="w-4 h-4" />
+              <span className="font-medium">Đang xem: {selectedRestaurant.name} - {selectedDate} lúc {selectedTime}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {loadingTables ? (
         <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">Đang tải danh sách bàn...</div>
       ) : (
@@ -320,7 +601,48 @@ const staffPage = () => {
     
     return (
       <div className="h-full flex flex-col">
-        <h2 className="text-xl font-bold mb-4">Hóa đơn thanh toán</h2>
+        {/* Header Information */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Building className="w-6 h-6" />
+                {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
+              </h1>
+              <p className="text-blue-100 text-sm mt-1">
+                {currentDateTime}
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-sm text-blue-100">Nhân viên</p>
+                <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
+              </div>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Hóa đơn thanh toán</h2>
+          <button 
+            onClick={() => {
+              if (currentOrdersTable) {
+                refreshOrdersForTable(currentOrdersTable);
+              }
+            }}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Làm mới
+          </button>
+        </div>
         
         <div className="grid md:grid-cols-2 gap-4 overflow-y-auto flex-1">
           <div className="space-y-3">
@@ -705,10 +1027,43 @@ const staffPage = () => {
     <div className="h-screen flex flex-col bg-gray-50">
       <div className="flex-1 overflow-hidden p-4">
         <div className="bg-white rounded-lg shadow-lg h-full p-4 overflow-y-auto">
-          {currentPage === 'orders' && <OrdersPage />}
-          {currentPage === 'tables' && <TablesPage />}
-          {currentPage === 'invoice' && <InvoicePage />}
-          {currentPage === 'notifications' && <NotificationsPage />}
+      {currentPage === 'orders' && <OrdersPage />}
+      {currentPage === 'tables' && <TablesPage />}
+      {currentPage === 'invoice' && <InvoicePage />}
+      {currentPage === 'notifications' && (
+        <div className="h-full flex flex-col">
+          {/* Header Information */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold flex items-center gap-2">
+                  <Building className="w-6 h-6" />
+                  {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
+                </h1>
+                <p className="text-blue-100 text-sm mt-1">
+                  {currentDateTime}
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-sm text-blue-100">Nhân viên</p>
+                  <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Đăng xuất
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <NotificationsPage />
+          </div>
+        </div>
+      )}
         </div>
       </div>
 

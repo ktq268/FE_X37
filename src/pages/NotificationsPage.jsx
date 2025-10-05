@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getPendingBookings, updateBookingStatus, getTables } from '../api/api.js';
-import { Bell, CheckCircle, XCircle, Calendar, Clock, Users, Phone, Mail, MessageSquare, MapPin } from 'lucide-react';
+import { Bell, CheckCircle, XCircle, Calendar, Clock, Users, Phone, Mail, MessageSquare, MapPin, AlertCircle, Building } from 'lucide-react';
 
 const NotificationsPage = () => {
   const [pendingBookings, setPendingBookings] = useState([]);
@@ -104,6 +104,28 @@ const NotificationsPage = () => {
     return new Date(dateString).toLocaleDateString('vi-VN', options);
   };
 
+  const formatTime = (timeString) => {
+    const [hours, minutes] = timeString.split(':');
+    return `${hours}:${minutes}`;
+  };
+
+  const getTimeStatus = (date, time) => {
+    const now = new Date();
+    const bookingDateTime = new Date(`${date}T${time}`);
+    const timeDiff = bookingDateTime - now;
+    const hoursDiff = timeDiff / (1000 * 60 * 60);
+
+    if (hoursDiff < 0) {
+      return { status: 'overdue', text: 'Quá hạn', color: 'text-red-600 bg-red-100' };
+    } else if (hoursDiff < 1) {
+      return { status: 'urgent', text: 'Gấp', color: 'text-orange-600 bg-orange-100' };
+    } else if (hoursDiff < 24) {
+      return { status: 'today', text: 'Hôm nay', color: 'text-blue-600 bg-blue-100' };
+    } else {
+      return { status: 'future', text: 'Tương lai', color: 'text-green-600 bg-green-100' };
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
@@ -136,14 +158,21 @@ const NotificationsPage = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {pendingBookings.map((booking) => (
+          {pendingBookings.map((booking) => {
+            const timeStatus = getTimeStatus(booking.date, booking.time);
+            return (
             <div key={booking._id} className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 hover:shadow-lg transition">
               <div className="bg-yellow-50 px-4 py-2 border-b border-yellow-100">
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-yellow-800">Yêu cầu đặt bàn mới</span>
-                  <span className="text-xs text-gray-500">
-                    {new Date(booking.createdAt).toLocaleTimeString('vi-VN')}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${timeStatus.color}`}>
+                      {timeStatus.text}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(booking.createdAt).toLocaleTimeString('vi-VN')}
+                    </span>
+                  </div>
                 </div>
               </div>
               
@@ -163,7 +192,13 @@ const NotificationsPage = () => {
                   
                   <div className="flex items-center text-gray-600">
                     <Clock className="h-4 w-4 mr-2" />
-                    <span className="font-medium">{booking.time}</span>
+                    <span className="font-medium">{formatTime(booking.time)}</span>
+                    {timeStatus.status === 'overdue' && (
+                      <AlertCircle className="h-4 w-4 ml-2 text-red-500" />
+                    )}
+                    {timeStatus.status === 'urgent' && (
+                      <AlertCircle className="h-4 w-4 ml-2 text-orange-500" />
+                    )}
                   </div>
                   
                   <div className="flex items-center text-gray-600">
@@ -191,20 +226,32 @@ const NotificationsPage = () => {
                       <span className="italic">{booking.note}</span>
                     </div>
                   )}
+
+                  {/* Thông tin chi nhánh */}
+                  {booking.restaurantName && (
+                    <div className="flex items-center text-gray-600">
+                      <Building className="h-4 w-4 mr-2" />
+                      <span className="font-medium">{booking.restaurantName}</span>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex space-x-2 mt-4">
                   <button
                     onClick={() => handleAccept(booking._id)}
-                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg flex items-center justify-center transition"
+                    className={`flex-1 py-2 px-4 rounded-lg flex items-center justify-center transition ${
+                      timeStatus.status === 'overdue' 
+                        ? 'bg-red-500 hover:bg-red-600 text-white' 
+                        : 'bg-green-500 hover:bg-green-600 text-white'
+                    }`}
                   >
                     <CheckCircle className="h-4 w-4 mr-1" />
-                    Xác nhận
+                    {timeStatus.status === 'overdue' ? 'Xử lý gấp' : 'Xác nhận'}
                   </button>
                   
                   <button
                     onClick={() => handleReject(booking._id)}
-                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg flex items-center justify-center transition"
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg flex items-center justify-center transition"
                   >
                     <XCircle className="h-4 w-4 mr-1" />
                     Từ chối
@@ -212,7 +259,8 @@ const NotificationsPage = () => {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       

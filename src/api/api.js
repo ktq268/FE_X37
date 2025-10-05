@@ -43,7 +43,6 @@ export async function getRestaurants(query = {}) {
 }
 
 // --- TABLES (Tìm bàn trống) ---
-// **ĐÃ SỬA:** Dùng POST và gửi data qua body để khớp với availabilityController.js
 // Endpoint: POST /api/available-tables
 export async function checkAvailableTables(data, token) {
   // data là object { region, restaurantId?, date, time, adults, children? }
@@ -112,4 +111,17 @@ export async function updateBookingStatus(bookingId, status, token, additionalDa
     { method: "PATCH", body: JSON.stringify({ status, ...additionalData }) },
     token
   );
+}
+
+// GET /api/bookings/by-date - Lấy booking theo ngày và giờ
+export async function getBookingsByDate(query = {}, token) {
+  const params = new URLSearchParams(query).toString();
+  return request(`/bookings/by-date${params ? `?${params}` : ""}`, { method: "GET" }, token);
+}
+
+// GET /api/bookings/restaurant/:restaurantId - Lấy booking theo nhà hàng
+export async function getBookingsByRestaurant(restaurantId, query = {}, token) {
+  if (!restaurantId) throw new Error("restaurantId is required");
+  const params = new URLSearchParams(query).toString();
+  return request(`/bookings/restaurant/${restaurantId}${params ? `?${params}` : ""}`, { method: "GET" }, token);
 }
