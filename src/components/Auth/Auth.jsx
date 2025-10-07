@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, User, Lock, Mail, Phone, ChefHat } from 'lucide-react';
 import { registerUser, loginUser } from '../../api/api.js';
 
 const RestaurantAuth = () => {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -14,6 +16,16 @@ const RestaurantAuth = () => {
     confirmPassword: ''
   });
   const [isLoading, setIsLoading] = useState(false); // Added loading state
+
+  const decodeRoleFromToken = (token) => {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1] || ''));
+      const role = payload?.user?.role || payload?.role || '';
+      return String(role).toLowerCase();
+    } catch (e) {
+      return '';
+    }
+  };
 
   const handleInputChange = (e) => {
     setFormData({
@@ -35,14 +47,29 @@ const RestaurantAuth = () => {
         });
         if (result.token) {
           localStorage.setItem("token", result.token);
+          // Backend login doesn't return user object; decode role from JWT
+          let role = '';
+          if (result.user && result.user.role) {
+            role = String(result.user.role).toLowerCase();
+          } else {
+            role = decodeRoleFromToken(result.token);
+          }
+          if (role) localStorage.setItem('role', role);
           alert("Đăng nhập thành công!");
+          // Redirect by role
+          const effectiveRole = (role || localStorage.getItem('role') || '').toLowerCase();
+          if (effectiveRole === 'staff') {
+            navigate('/staff', { replace: true });
+          } else {
+            navigate('/', { replace: true });
+          }
           console.log("Login result:", result);
         } else {
           alert(result.msg || "Đăng nhập thất bại");
         }
       } catch (err) {
         console.error("Login error:", err);
-        alert("Có lỗi xảy ra khi đăng nhập");
+        alert(err.message || "Có lỗi xảy ra khi đăng nhập");
       }
     } else {
       // Register
@@ -56,9 +83,7 @@ const RestaurantAuth = () => {
         const result = await registerUser({
           username: formData.name,
           email: formData.email,
-          phone: formData.phone, // Lưu ý: phone không được lưu do schema
           password: formData.password,
-          role: "customer",
         });
         console.log("Register API response:", result);
 

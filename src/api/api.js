@@ -1,5 +1,5 @@
-// api.js (Đã sửa đổi hoàn chỉnh)
-const API_URL = "https://be-x37-eight.vercel.app/api";
+// FE_X37/src/api/api.js
+const API_URL = "http://localhost:3000/api";
 
 // Hàm tiện ích để gọi API (Giữ nguyên)
 async function request(endpoint, options = {}, token = null) {
@@ -43,7 +43,6 @@ export async function getRestaurants(query = {}) {
 }
 
 // --- TABLES (Tìm bàn trống) ---
-// **ĐÃ SỬA:** Dùng POST và gửi data qua body để khớp với availabilityController.js
 // Endpoint: POST /api/available-tables
 export async function checkAvailableTables(data, token) {
   // data là object { region, restaurantId?, date, time, adults, children? }
@@ -70,4 +69,59 @@ export async function createReservation(data, token) {
 // --- OTHER (Giữ nguyên) ---
 export async function getReservations(token) {
   return request("/bookings", { method: "GET" }, token);
+}
+
+// --- STAFF: TABLES ---
+// GET /api/tables?restaurantId=...&date=...&time=...
+export async function getTables(query = {}, token) {
+  const params = new URLSearchParams(query).toString();
+  return request(`/tables${params ? `?${params}` : ""}`, { method: "GET" }, token);
+}
+
+// PATCH /api/tables/:id/status { status }
+export async function updateTableStatusById(tableId, status, token) {
+  if (!tableId) throw new Error("tableId is required");
+  if (!status) throw new Error("status is required");
+  return request(
+    `/tables/${tableId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
+    token
+  );
+}
+
+// --- STAFF: BOOKINGS (orders by table) ---
+// GET /api/bookings/table/:tableId?date=YYYY-MM-DD
+export async function getBookingsByTable(tableId, query = {}, token) {
+  if (!tableId) throw new Error("tableId is required");
+  const params = new URLSearchParams(query).toString();
+  return request(`/bookings/table/${tableId}${params ? `?${params}` : ""}`, { method: "GET" }, token);
+}
+
+// GET /api/bookings/pending - Lấy tất cả booking đang chờ xử lý
+export async function getPendingBookings(token) {
+  return request(`/bookings/pending`, { method: "GET" }, token);
+}
+
+// PATCH /api/bookings/:id/status { status, tableId? }
+export async function updateBookingStatus(bookingId, status, token, additionalData = {}) {
+  if (!bookingId) throw new Error("bookingId is required");
+  if (!status) throw new Error("status is required");
+  return request(
+    `/bookings/${bookingId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status, ...additionalData }) },
+    token
+  );
+}
+
+// GET /api/bookings/by-date - Lấy booking theo ngày và giờ
+export async function getBookingsByDate(query = {}, token) {
+  const params = new URLSearchParams(query).toString();
+  return request(`/bookings/by-date${params ? `?${params}` : ""}`, { method: "GET" }, token);
+}
+
+// GET /api/bookings/restaurant/:restaurantId - Lấy booking theo nhà hàng
+export async function getBookingsByRestaurant(restaurantId, query = {}, token) {
+  if (!restaurantId) throw new Error("restaurantId is required");
+  const params = new URLSearchParams(query).toString();
+  return request(`/bookings/restaurant/${restaurantId}${params ? `?${params}` : ""}`, { method: "GET" }, token);
 }
