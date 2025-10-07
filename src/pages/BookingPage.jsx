@@ -309,7 +309,7 @@ const BookingPage = () => {
 
   // --- JSX TEMPLATE (Giữ nguyên UI) ---
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gray-900">
+    <div className="min-h-screen relative overflow-hidden bg-gray-900 pt-20 md:pt-24">
       {/* Background */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -321,7 +321,7 @@ const BookingPage = () => {
       </div>
 
       {/* Header */}
-      <div className="relative z-10 ">
+      <div className="relative z-[9999]">
         <Header />
       </div>
 
