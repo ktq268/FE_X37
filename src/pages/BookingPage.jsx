@@ -12,6 +12,8 @@ import {
   Mail,
   Globe,
   ArrowLeft,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
 import Select from "react-select";
 import { useNavigate } from "react-router-dom";
@@ -49,8 +51,42 @@ const BookingPage = () => {
   const [availabilityResults, setAvailabilityResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTableInfo, setSelectedTableInfo] = useState(null);
+  const [timeValidation, setTimeValidation] = useState({ isValid: true, message: "" });
 
   const navigate = useNavigate();
+
+  // --- VALIDATION THỜI GIAN ĐẶT BÀN ---
+  const validateBookingTime = (dateTime) => {
+    if (!dateTime) {
+      return { isValid: false, message: "Vui lòng chọn thời gian đặt bàn" };
+    }
+
+    const now = new Date();
+    const selectedDate = new Date(dateTime);
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    // Kiểm tra thời gian không được trong quá khứ
+    if (selectedDate <= now) {
+      return { isValid: false, message: "Thời gian đặt bàn không được trong quá khứ" };
+    }
+
+    // Kiểm tra thời gian không được quá xa (tối đa 30 ngày)
+    const maxDate = new Date(now);
+    maxDate.setDate(maxDate.getDate() + 30);
+    if (selectedDate > maxDate) {
+      return { isValid: false, message: "Không thể đặt bàn quá 30 ngày trước" };
+    }
+
+    // Kiểm tra giờ mở cửa (8:00 - 22:00)
+    const hour = selectedDate.getHours();
+    if (hour < 8 || hour > 22) {
+      return { isValid: false, message: "Nhà hàng mở cửa từ 8:00 đến 22:00" };
+    }
+
+    return { isValid: true, message: "" };
+  };
 
   // --- LẤY DANH SÁCH CHI NHÁNH THEO MIỀN ---
   useEffect(() => {
@@ -109,6 +145,13 @@ const BookingPage = () => {
     const { name, value } = e.target;
     if (step === 1) {
       setBookingDetails((prev) => ({ ...prev, [name]: value }));
+      
+      // Validate thời gian khi thay đổi
+      if (name === "dateTime") {
+        const validation = validateBookingTime(value);
+        setTimeValidation(validation);
+      }
+      
       if (
         name === "dateTime" ||
         name === "adults" ||
@@ -142,6 +185,13 @@ const BookingPage = () => {
   // --- STEP 1: KIỂM TRA BÀN TRỐNG (CHECK AVAILABILITY) ---
   const handleCheckAvailability = async (e) => {
     e.preventDefault();
+
+    // Validate thời gian trước khi kiểm tra
+    const timeValidation = validateBookingTime(bookingDetails.dateTime);
+    if (!timeValidation.isValid) {
+      alert(timeValidation.message);
+      return;
+    }
 
     if (
       !bookingDetails.dateTime ||
@@ -309,7 +359,7 @@ const BookingPage = () => {
 
   // --- JSX TEMPLATE (Giữ nguyên UI) ---
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gray-900">
+    <div className="min-h-screen relative overflow-hidden bg-gray-900 pt-20 md:pt-24">
       {/* Background */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -321,7 +371,7 @@ const BookingPage = () => {
       </div>
 
       {/* Header */}
-      <div className="relative z-10 ">
+      <div className="relative z-[9999]">
         <Header />
       </div>
 
@@ -352,7 +402,7 @@ const BookingPage = () => {
                   </h2>
                 </div>
 
-                {/* Input: Ngày/giờ (Giữ nguyên) */}
+                {/* Input: Ngày/giờ với validation */}
                 <div className="relative animate-slide-in">
                   <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
@@ -360,9 +410,17 @@ const BookingPage = () => {
                     name="dateTime"
                     value={bookingDetails.dateTime}
                     onChange={handleInputChange}
-                    className="w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                    className={`w-full pl-12 pr-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
+                      !timeValidation.isValid ? 'border-red-500' : ''
+                    }`}
                     required
                   />
+                  {!timeValidation.isValid && (
+                    <div className="flex items-center mt-2 text-red-400 text-sm">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {timeValidation.message}
+                    </div>
+                  )}
                 </div>
 
                 {/* SELECT: MIỀN (REGION) */}
@@ -445,8 +503,8 @@ const BookingPage = () => {
                 {/* BUTTON: KIỂM TRA BÀN TRỐNG */}
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in flex justify-center items-center"
+                  disabled={isLoading || !timeValidation.isValid}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   style={{ animationDelay: "0.3s" }}
                 >
                   {isLoading ? (
@@ -518,7 +576,8 @@ const BookingPage = () => {
                     <span className="font-semibold">Chi nhánh:</span>{" "}
                     {selectedRestaurantName}
                   </p>
-                  <p>
+                  <p className="flex items-center">
+                    <Clock className="w-4 h-4 mr-2" />
                     <span className="font-semibold">Ngày giờ:</span>{" "}
                     {bookingDetails.dateTime.replace("T", " ")}
                   </p>
