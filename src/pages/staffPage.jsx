@@ -122,7 +122,6 @@ const refreshTables = async (query = {}) => {
     const queryWithTime = {
       ...query,
       date: query.date || selectedDate,
-      time: query.time || selectedTime
     };
 
     console.log('Fetching tables with query:', queryWithTime, 'token:', token ? 'present' : 'missing');
@@ -309,9 +308,6 @@ const refreshTables = async (query = {}) => {
     refreshTables({ restaurantId });
   };
 
-  const handleDateTimeChange = () => {
-    refreshTables(selectedRestaurant ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id } : {});
-  };
 
   const getUniqueRegions = () => {
     return [
@@ -417,7 +413,7 @@ const refreshTables = async (query = {}) => {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Building className="w-6 h-6" />
-              {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
+              {selectedRestaurant?.name || 'Maison de Flavors '}
             </h1>
             <p className="text-blue-100 text-sm mt-1">
               {currentDateTime}
@@ -503,35 +499,18 @@ const refreshTables = async (query = {}) => {
                 refreshTables({
                   restaurantId: selectedRestaurant?._id || selectedRestaurant?.id,
                   date: newDate,
-                  time: selectedTime   // dùng selectedTime hiện tại
                 });
               }}
               className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Giờ</label>
-            <input
-              type="time"
-              value={selectedTime}
-              onChange={(e) => {
-                const newTime = e.target.value;
-                setSelectedTime(newTime);
-                refreshTables({
-                  restaurantId: selectedRestaurant?._id || selectedRestaurant?.id,
-                  date: selectedDate, // dùng selectedDate hiện tại
-                  time: newTime
-                });
-              }}
-              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-            />
-          </div>
+          {/* x  */}
         </div>
         {selectedRestaurant && (
           <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
             <div className="flex items-center gap-2 text-blue-800">
               <MapPin className="w-4 h-4" />
-              <span className="font-medium">Đang xem: {selectedRestaurant.name} - {selectedDate} lúc {selectedTime}</span>
+              <span className="font-medium">Đang xem: {selectedRestaurant.name} - {selectedDate}</span>
             </div>
           </div>
         )}
