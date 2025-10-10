@@ -1,27 +1,14 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import RestaurantAuth from './components/Auth/Auth'; // Đường dẫn dựa trên thư mục đề xuất
-import BookingPage from './pages/BookingPage';
-import BookingSuccess from'./pages/BookingSuccess.jsx';
-import StaffPage from './pages/staffPage.jsx';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import HomePage from "./pages/HomePage";
+import RestaurantAuth from "./components/Auth/Auth";
+import BookingPage from "./pages/BookingPage";
+import BookingSuccess from "./pages/BookingSuccess";
+import StaffPage from "./pages/staffPage";
+import AdminPage from "./pages/adminPage";
 import MenuPage from "./pages/MenuPage";
-
-function StaffOnlyRoute({ children }) {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  let role = typeof window !== 'undefined' ? (localStorage.getItem('role') || '').toLowerCase() : null;
-  if (token && !role) {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1] || ''));
-      role = String(payload?.user?.role || payload?.role || '').toLowerCase();
-      if (role) localStorage.setItem('role', role);
-    } catch (e) {}
-  }
-  if (!token || role !== 'staff') {
-    return <Navigate to="/auth" replace />;
-  }
-  return children;
-}``
+import StaffOnlyRoute from "./routes/StaffOnlyRoute";
+import AdminOnlyRoute from "./routes/AdminOnlyRoute";
 
 function App() {
   return (
@@ -31,6 +18,8 @@ function App() {
         <Route path="/auth" element={<RestaurantAuth />} />
         <Route path="/booking" element={<BookingPage />} />
         <Route path="/booking-success" element={<BookingSuccess />} />
+
+        {/* Staff only */}
         <Route
           path="/staff"
           element={
@@ -39,6 +28,17 @@ function App() {
             </StaffOnlyRoute>
           }
         />
+
+        {/* Admin only */}
+        <Route
+          path="/admin"
+          element={
+            <AdminOnlyRoute>
+              <AdminPage />
+            </AdminOnlyRoute>
+          }
+        />
+
         <Route path="/menu" element={<MenuPage />} />
       </Routes>
     </Router>

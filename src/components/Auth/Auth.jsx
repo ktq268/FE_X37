@@ -60,9 +60,12 @@ const RestaurantAuth = () => {
           const effectiveRole = (role || localStorage.getItem('role') || '').toLowerCase();
           if (effectiveRole === 'staff') {
             navigate('/staff', { replace: true });
+          } else if (effectiveRole === 'admin') {
+            navigate('/admin', { replace: true });
           } else {
             navigate('/', { replace: true });
           }
+          
           console.log("Login result:", result);
         } else {
           alert(result.msg || "Đăng nhập thất bại");

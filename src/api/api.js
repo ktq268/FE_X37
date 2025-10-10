@@ -95,27 +95,63 @@ export async function getReservations(token) {
 
 // --- MENU (Lấy danh sách món ăn) ---
 // Lấy danh sách món ăn (search, filter)
-export async function getMenuItems({ q, tag } = {}) {
-  const params = new URLSearchParams({ q, tag }).toString();
-  return request(`/api/menu/items${params ? `?${params}` : ""}`);
+export async function getMenuItems(filters = {}, token) {
+  const params = new URLSearchParams();
+
+  if (filters.q) params.append("q", filters.q);
+  if (filters.tag) params.append("tag", filters.tag);
+
+  const queryString = params.toString();
+  return request(`/api/menu/items${queryString ? `?${queryString}` : ""}`, {}, token);
 }
+
 
 // Lấy chi tiết 1 món ăn
 export async function getMenuItemDetail(id) {
   return request(`/api/menu/items/${id}`);
 }
 
-// Lấy menu đầy đủ (group theo category) - không có pagination
 export async function getFullMenu() {
   return request(`/api/menu/full`);
 }
+
+// Thêm món ăn (POST /api/menu/items)
+export async function createMenuItem(data, token) {
+  return request(
+    `/api/menu/items`,
+    { method: "POST", body: JSON.stringify(data) },
+    token
+  );
+}
+
+// Cập nhật món ăn (PUT /api/menu/items/:id)
+export async function updateMenuItem(id, data, token) {
+  return request(
+    `/api/menu/items/${id}`,
+    { method: "PUT", body: JSON.stringify(data) },
+    token
+  );
+}
+
+// Xóa món ăn (DELETE /api/menu/items/:id)
+export async function deleteMenuItem(id, token) {
+  return request(`/api/menu/items/${id}`, { method: "DELETE" }, token);
+}
+
+
+// Lấy menu đầy đủ (group theo category) - không có pagination
+export async function listFullMenu(query = {}) {
+  const params = new URLSearchParams(query).toString();
+  return request(`/api/menu/full${params ? `?${params}` : ""}`);
+}
+
 
 // --- STAFF: TABLES ---
 // GET /api/tables?restaurantId=...&date=...&time=...
 export async function getTables(query = {}, token) {
   const params = new URLSearchParams(query).toString();
   return request(
-    `/tables${params ? `?${params}` : ""}`,
+    `/api/tables${params ? `?${params}` : ""}`,
     { method: "GET" },
     token
   );
@@ -126,11 +162,21 @@ export async function updateTableStatusById(tableId, status, token) {
   if (!tableId) throw new Error("tableId is required");
   if (!status) throw new Error("status is required");
   return request(
-    `/tables/${tableId}/status`,
+    `/api/tables/${tableId}/status`,
     { method: "PATCH", body: JSON.stringify({ status }) },
     token
   );
 }
+
+// POST /api/tables
+export async function createTable(data, token) {
+  return request(
+    `/api/tables`,
+    { method: "POST", body: JSON.stringify(data) },
+    token
+  );
+}
+
 
 // --- STAFF: BOOKINGS (orders by table) ---
 // GET /api/bookings/table/:tableId?date=YYYY-MM-DD
@@ -138,7 +184,7 @@ export async function getBookingsByTable(tableId, query = {}, token) {
   if (!tableId) throw new Error("tableId is required");
   const params = new URLSearchParams(query).toString();
   return request(
-    `/bookings/table/${tableId}${params ? `?${params}` : ""}`,
+    `/api/bookings/table/${tableId}${params ? `?${params}` : ""}`,
     { method: "GET" },
     token
   );
@@ -146,7 +192,7 @@ export async function getBookingsByTable(tableId, query = {}, token) {
 
 // GET /api/bookings/pending - Lấy tất cả booking đang chờ xử lý
 export async function getPendingBookings(token) {
-  return request(`/bookings/pending`, { method: "GET" }, token);
+  return request(`/api/bookings/pending`, { method: "GET" }, token);
 }
 
 // PATCH /api/bookings/:id/status { status, tableId? }
@@ -159,7 +205,7 @@ export async function updateBookingStatus(
   if (!bookingId) throw new Error("bookingId is required");
   if (!status) throw new Error("status is required");
   return request(
-    `/bookings/${bookingId}/status`,
+    `/api/bookings/${bookingId}/status`,
     { method: "PATCH", body: JSON.stringify({ status, ...additionalData }) },
     token
   );
@@ -169,7 +215,7 @@ export async function updateBookingStatus(
 export async function getBookingsByDate(query = {}, token) {
   const params = new URLSearchParams(query).toString();
   return request(
-    `/bookings/by-date${params ? `?${params}` : ""}`,
+    `/api/bookings/by-date${params ? `?${params}` : ""}`,
     { method: "GET" },
     token
   );
@@ -180,7 +226,7 @@ export async function getBookingsByRestaurant(restaurantId, query = {}, token) {
   if (!restaurantId) throw new Error("restaurantId is required");
   const params = new URLSearchParams(query).toString();
   return request(
-    `/bookings/restaurant/${restaurantId}${params ? `?${params}` : ""}`,
+    `/api/bookings/restaurant/${restaurantId}${params ? `?${params}` : ""}`,
     { method: "GET" },
     token
   );

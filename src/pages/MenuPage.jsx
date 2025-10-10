@@ -23,15 +23,25 @@ export default function MenuPage() {
 
   // Helper: cố gắng lấy URL ảnh từ các field phổ biến
   const getItemImage = (item) => {
+    // Nếu imageUrl là mảng, lấy phần tử đầu tiên
+    if (Array.isArray(item?.imageUrl) && item.imageUrl.length > 0) {
+      return item.imageUrl[0];
+    }
+  
+    // Nếu là chuỗi, trả về trực tiếp
+    if (typeof item?.imageUrl === "string") {
+      return item.imageUrl;
+    }
+  
+    // Dự phòng các key khác
     return (
-      item?.imageUrl ||
       item?.image ||
       item?.thumbnail ||
       (Array.isArray(item?.images) && item.images[0]) ||
       item?.photo ||
       null
     );
-  };
+  };  
 
   // load menu đầy đủ khi vào page (không pagination)
   useEffect(() => {
@@ -296,18 +306,35 @@ export default function MenuPage() {
                 <X className="w-5 h-5 text-gray-600" />
               </button>
               <div className="h-64 relative">
-                {getItemImage(selectedItem) ? (
+                {Array.isArray(selectedItem?.imageUrl) && selectedItem.imageUrl.length > 0 ? (
+                  <Swiper
+                    spaceBetween={8}
+                    slidesPerView={1}
+                    className="w-full h-full rounded-2xl overflow-hidden"
+                  >
+                    {selectedItem.imageUrl.map((img, idx) => (
+                      <SwiperSlide key={idx}>
+                        <img
+                          src={img}
+                          alt={`${selectedItem.name}-${idx}`}
+                          className="w-full h-64 object-cover"
+                        />
+                      </SwiperSlide>
+                    ))}
+                  </Swiper>
+                ) : getItemImage(selectedItem) ? (
                   <img
                     src={getItemImage(selectedItem)}
                     alt={selectedItem.name}
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full object-cover rounded-2xl"
                   />
                 ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center rounded-2xl">
                     <ChefHat className="w-20 h-20 text-orange-400" />
                   </div>
                 )}
               </div>
+              
               <div className="p-8">
                 <h2 className="text-3xl font-bold text-gray-800 mb-4">
                   {selectedItem.name}
