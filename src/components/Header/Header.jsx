@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChefHat, User, ShoppingCart, LogOut } from 'lucide-react'; 
-import {Link, useNavigate} from 'react-router-dom'
-import { getCurrentUser } from '../../api/api.js';
+import React, { useState, useEffect, useRef } from "react";
+import { ChefHat, User, LogOut } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { getCurrentUser } from "../../api/api.js";
+import CartBadge from "../CartBadge/CartBadge";
 
 const Header = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -11,7 +12,7 @@ const Header = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) return;
     getCurrentUser(token)
       .then((user) => {
@@ -19,8 +20,8 @@ const Header = () => {
         setIsAuthenticated(true);
       })
       .catch(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('role');
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
         setIsAuthenticated(false);
         setUserInfo(null);
       });
@@ -32,16 +33,16 @@ const Header = () => {
         setIsMenuOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
     setIsAuthenticated(false);
     setUserInfo(null);
-    navigate('/');
+    navigate("/");
   };
 
   return (
@@ -69,19 +70,17 @@ const Header = () => {
         </nav>
         {/* Login and Cart */}
         <div className="flex items-center space-x-4">
-          <a href="/cart" className="hover:text-yellow-200">
-            <ShoppingCart className="w-6 h-6" />
-          </a>
+          <CartBadge />
           {isAuthenticated ? (
             <div className="relative" ref={menuRef}>
-              <button 
+              <button
                 onClick={() => setIsMenuOpen((v) => !v)}
                 className="flex items-center bg-white text-orange-500 px-4 py-2 rounded-lg hover:bg-gray-100"
                 aria-haspopup="menu"
                 aria-expanded={isMenuOpen}
               >
                 <User className="w-5 h-5 mr-2" />
-                {userInfo?.username || userInfo?.name || 'Tài khoản'}
+                {userInfo?.username || userInfo?.name || "Tài khoản"}
               </button>
               {isMenuOpen && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-xl ring-1 ring-black/5 overflow-hidden z-50">
@@ -96,7 +95,10 @@ const Header = () => {
               )}
             </div>
           ) : (
-            <Link to="/auth" className="flex items-center bg-white text-orange-500 px-4 py-2 rounded-lg hover:bg-gray-100">
+            <Link
+              to="/auth"
+              className="flex items-center bg-white text-orange-500 px-4 py-2 rounded-lg hover:bg-gray-100"
+            >
               <User className="w-5 h-5 mr-2" />
               Đăng nhập
             </Link>

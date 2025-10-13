@@ -115,7 +115,7 @@ export async function getFullMenu() {
 export async function getTables(query = {}, token) {
   const params = new URLSearchParams(query).toString();
   return request(
-    `/tables${params ? `?${params}` : ""}`,
+    `/api/tables${params ? `?${params}` : ""}`,
     { method: "GET" },
     token
   );
@@ -126,7 +126,7 @@ export async function updateTableStatusById(tableId, status, token) {
   if (!tableId) throw new Error("tableId is required");
   if (!status) throw new Error("status is required");
   return request(
-    `/tables/${tableId}/status`,
+    `/api/tables/${tableId}/status`,
     { method: "PATCH", body: JSON.stringify({ status }) },
     token
   );
@@ -138,7 +138,7 @@ export async function getBookingsByTable(tableId, query = {}, token) {
   if (!tableId) throw new Error("tableId is required");
   const params = new URLSearchParams(query).toString();
   return request(
-    `/bookings/table/${tableId}${params ? `?${params}` : ""}`,
+    `/api/bookings/table/${tableId}${params ? `?${params}` : ""}`,
     { method: "GET" },
     token
   );
@@ -146,7 +146,7 @@ export async function getBookingsByTable(tableId, query = {}, token) {
 
 // GET /api/bookings/pending - Lấy tất cả booking đang chờ xử lý
 export async function getPendingBookings(token) {
-  return request(`/bookings/pending`, { method: "GET" }, token);
+  return request(`/api/bookings/pending`, { method: "GET" }, token);
 }
 
 // PATCH /api/bookings/:id/status { status, tableId? }
@@ -159,7 +159,7 @@ export async function updateBookingStatus(
   if (!bookingId) throw new Error("bookingId is required");
   if (!status) throw new Error("status is required");
   return request(
-    `/bookings/${bookingId}/status`,
+    `/api/bookings/${bookingId}/status`,
     { method: "PATCH", body: JSON.stringify({ status, ...additionalData }) },
     token
   );
@@ -169,7 +169,7 @@ export async function updateBookingStatus(
 export async function getBookingsByDate(query = {}, token) {
   const params = new URLSearchParams(query).toString();
   return request(
-    `/bookings/by-date${params ? `?${params}` : ""}`,
+    `/api/bookings/by-date${params ? `?${params}` : ""}`,
     { method: "GET" },
     token
   );
@@ -180,8 +180,95 @@ export async function getBookingsByRestaurant(restaurantId, query = {}, token) {
   if (!restaurantId) throw new Error("restaurantId is required");
   const params = new URLSearchParams(query).toString();
   return request(
-    `/bookings/restaurant/${restaurantId}${params ? `?${params}` : ""}`,
+    `/api/bookings/restaurant/${restaurantId}${params ? `?${params}` : ""}`,
     { method: "GET" },
     token
   );
 }
+
+// --- CART ---
+export async function getCart(token) {
+  return request(`/api/cart`, { method: "GET" }, token);
+}
+
+export async function addCartItem(
+  { menuItemId, quantity = 1, notes = "" },
+  token
+) {
+  if (!menuItemId) throw new Error("menuItemId is required");
+  return request(
+    `/api/cart/items`,
+    { method: "POST", body: JSON.stringify({ menuItemId, quantity, notes }) },
+    token
+  );
+}
+
+export async function updateCartItem(
+  menuItemId,
+  { quantity, notes = "" },
+  token
+) {
+  if (!menuItemId) throw new Error("menuItemId is required");
+  return request(
+    `/api/cart/items/${menuItemId}`,
+    { method: "PUT", body: JSON.stringify({ quantity, notes }) },
+    token
+  );
+}
+
+export async function removeCartItem(menuItemId, token) {
+  if (!menuItemId) throw new Error("menuItemId is required");
+  return request(`/api/cart/items/${menuItemId}`, { method: "DELETE" }, token);
+}
+
+export async function clearCart(token) {
+  return request(`/api/cart/clear`, { method: "DELETE" }, token);
+}
+
+// --- ORDERS ---
+export async function createOrderFromCart(body = {}, token) {
+  return request(
+    `/api/orders/from-cart`,
+    { method: "POST", body: JSON.stringify(body) },
+    token
+  );
+}
+
+export async function getMyOrders(token) {
+  return request(`/api/orders/mine`, { method: "GET" }, token);
+}
+
+export async function getOrderDetail(orderId, token) {
+  if (!orderId) throw new Error("orderId is required");
+  return request(`/api/orders/${orderId}`, { method: "GET" }, token);
+}
+
+// --- STAFF ORDERS ---
+export async function staffGetOrders(query = {}, token) {
+  const params = new URLSearchParams(query).toString();
+  return request(
+    `/api/orders${params ? `?${params}` : ""}`,
+    { method: "GET" },
+    token
+  );
+}
+
+export async function staffGetOrderDetail(orderId, token) {
+  if (!orderId) throw new Error("orderId is required");
+  return request(`/api/orders/${orderId}/detail`, { method: "GET" }, token);
+}
+
+export async function staffUpdateOrderStatus(orderId, status, token) {
+  if (!orderId) throw new Error("orderId is required");
+  if (!status) throw new Error("status is required");
+  return request(
+    `/api/orders/${orderId}/status`,
+    { method: "PUT", body: JSON.stringify({ status }) },
+    token
+  );
+}
+
+export const getOrders = async (status) => {
+  const response = await getOrders("/orders", { params: { status } });
+  return response.data;
+};

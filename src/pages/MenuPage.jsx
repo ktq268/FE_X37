@@ -9,6 +9,8 @@ import {
   Users,
 } from "lucide-react";
 import { getMenuItems, getMenuItemDetail, getFullMenu } from "../api/api";
+import { useCart } from "../contexts/CartContext";
+import { useToast } from "../contexts/ToastContext";
 import Header from "../components/Header/Header";
 import Footer from "../components/Footer/Footer";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -20,6 +22,8 @@ export default function MenuPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { addToCart } = useCart();
+  const { showSuccess } = useToast();
 
   // Helper: cố gắng lấy URL ảnh từ các field phổ biến
   const getItemImage = (item) => {
@@ -77,23 +81,16 @@ export default function MenuPage() {
     }
   }
 
-  // Thêm vào giỏ hàng (localStorage)
-  function addToCart(item) {
+  // Thêm vào giỏ hàng
+  const handleAddToCart = async (item) => {
     try {
-      const existing = JSON.parse(localStorage.getItem("cart") || "[]");
-      const index = existing.findIndex((x) => x._id === item._id);
-      if (index >= 0) {
-        existing[index].quantity = (existing[index].quantity || 1) + 1;
-      } else {
-        existing.push({ ...item, quantity: 1 });
-      }
-      localStorage.setItem("cart", JSON.stringify(existing));
-      // đóng modal sau khi thêm để chuẩn bị order sau này
+      await addToCart(item, 1);
+      showSuccess(`${item.name} đã được thêm vào giỏ hàng!`);
       setSelectedItem(null);
     } catch (e) {
       console.error("Add to cart failed", e);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -339,7 +336,7 @@ export default function MenuPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <button
-                    onClick={() => addToCart(selectedItem)}
+                    onClick={() => handleAddToCart(selectedItem)}
                     className="w-full bg-orange-500 text-white py-4 rounded-lg hover:bg-orange-600 transition-colors font-medium text-lg"
                   >
                     Thêm vào giỏ
