@@ -8,6 +8,7 @@ import {
   getRestaurants,
   staffGetOrders,
   staffUpdateOrderStatus,
+  getOrders,
 } from "../api/api.js";
 import {
   Clock,
@@ -42,6 +43,7 @@ const staffPage = () => {
   const [showOrderDetailModal, setShowOrderDetailModal] = useState(false);
 
   const [orders, setOrders] = useState([]);
+  const [ordersList, setOrdersList] = useState([]);
   const [onlineOrders, setOnlineOrders] = useState([]);
 
   const [tables, setTables] = useState([]);
@@ -283,13 +285,22 @@ const staffPage = () => {
   };
 
   const fetchOrders = async () => {
+    setLoadingOrders(true);
+    setErrorMessage("");
     try {
-      console.log("Fetching orders with status:", filterStatus);
-      const data = await getOrders(filterStatus); // gọi API từ api.js
-      console.log("Fetched:", data);
-      setOrders(data.orders || []); // chỉ lấy mảng orders
+      const query = {};
+      if (filterStatus && filterStatus !== "all") {
+        query.status = filterStatus;
+      }
+      const res = await getOrders(query, token);
+      const list = Array.isArray(res) ? res : res?.orders || [];
+      setOrdersList(list);
     } catch (err) {
       console.error("Error fetching orders:", err);
+      setOrdersList([]);
+      setErrorMessage(err.message || "Không tải được danh sách order");
+    } finally {
+      setLoadingOrders(false);
     }
   };
 
@@ -298,7 +309,7 @@ const staffPage = () => {
     updateDateTime();
     loadRestaurants();
     refreshTables({});
-    refreshOnlineOrders();
+    // refreshOnlineOrders();
     fetchOrders();
 
     // Update time every minute
@@ -390,7 +401,7 @@ const staffPage = () => {
       >
         <div className="flex justify-between items-start mb-2">
           <div>
-            <h3 className="font-bold text-base">#{order.id || "N/A"}</h3>
+            <h3 className="font-bold text-base">#{order.id || order._id || "N/A"}</h3>
             <div className="text-xs text-gray-600 flex items-center gap-1">
               <span>Bàn {order.tableNumber || "N/A"}</span>
               <span>•</span>
@@ -429,14 +440,20 @@ const staffPage = () => {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const order = orders.find((o) => o.id === orderId);
+      const order = orders.find((o) => (o.id || o._id) === orderId);
       if (order) {
         const beStatus = feToBeOrderStatus(newStatus);
         await updateBookingStatus(order.bookingId || orderId, beStatus, token);
         await refreshOrdersForTable(currentOrdersTable);
         return;
       }
-      const online = onlineOrders.find((o) => o.id === orderId);
+      const online = onlineOrders.find((o) => (o.id || o._id) === orderId);
+      if (!order && !online) {
+        // Fallback: update generic staff order by id
+        await staffUpdateOrderStatus(orderId, newStatus, token);
+        await fetchOrders();
+        return;
+      }
       if (online) {
         await staffUpdateOrderStatus(orderId, newStatus, token);
         await refreshOnlineOrders();
@@ -491,17 +508,7 @@ const staffPage = () => {
     }
   };
 
-  const mergedOrders = [...onlineOrders, ...orders];
-  const filteredOrders =
-    filterStatus === "all"
-      ? mergedOrders
-      : mergedOrders.filter((order) => {
-          if (filterStatus === "preparing")
-            return ["confirmed", "preparing"].includes(order.status);
-          if (filterStatus === "completed")
-            return ["completed", "cancelled"].includes(order.status);
-          return order.status === filterStatus;
-        });
+
 
   const handleRegionChange = async (region) => {
     setSelectedRegion(region);
@@ -625,11 +632,11 @@ const staffPage = () => {
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2">
-          {filteredOrders.length === 0 ? (
+          {ordersList.length === 0 ? (
             <div className="text-gray-500 text-sm">Không có order</div>
           ) : (
-            filteredOrders.map((order) => (
-              <CompactOrderCard key={order.id} order={order} />
+            ordersList.map((order) => (
+              <CompactOrderCard key={order.id || order._id} order={order} />
             ))
           )}
         </div>
@@ -1256,7 +1263,7 @@ const staffPage = () => {
         <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
             <h3 className="text-xl font-bold">
-              Chi tiết Order #{selectedOrder.id}
+              Chi tiết Order #{selectedOrder.id || selectedOrder._id}
             </h3>
             <button
               onClick={() => setShowOrderDetailModal(false)}
@@ -1336,7 +1343,7 @@ const staffPage = () => {
                 {selectedOrder.status === "pending" && (
                   <button
                     onClick={() => {
-                      updateOrderStatus(selectedOrder.id, "preparing");
+                      updateOrderStatus(selectedOrder.id || selectedOrder._id, "preparing");
                       setShowOrderDetailModal(false);
                     }}
                     className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-lg font-medium transition"
@@ -1347,7 +1354,7 @@ const staffPage = () => {
                 {selectedOrder.status === "preparing" && (
                   <button
                     onClick={() => {
-                      updateOrderStatus(selectedOrder.id, "served");
+                      updateOrderStatus(selectedOrder.id || selectedOrder._id, "served");
                       setShowOrderDetailModal(false);
                     }}
                     className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition"

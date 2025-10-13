@@ -268,7 +268,12 @@ export async function staffUpdateOrderStatus(orderId, status, token) {
   );
 }
 
-export const getOrders = async (status) => {
-  const response = await getOrders("/orders", { params: { status } });
-  return response.data;
-};
+// Generic orders fetcher with optional query and token
+export async function getOrders(query = {}, token) {
+  const params = new URLSearchParams(query).toString();
+  return request(
+    `/api/orders${params ? `?${params}` : ""}`,
+    { method: "GET" },
+    token
+  );
+}
