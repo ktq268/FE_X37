@@ -277,3 +277,26 @@ export async function getOrders(query = {}, token) {
     token
   );
 }
+
+// ===== INVOICE APIs =====
+
+// Tạo hóa đơn từ order
+export const createInvoiceFromOrder = async (orderId, token) => {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/invoices`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ orderId }),
+  });
+  if (!res.ok) throw new Error("Không tạo được hóa đơn");
+  return res.json();
+};
+
+// Xuất PDF hóa đơn
+export const exportInvoicePdf = async (invoiceId, token) => {
+  const url = `${import.meta.env.VITE_API_URL}/api/invoices/${invoiceId}/export-pdf`;
+  // chỉ trả về URL để frontend mở tab mới
+  return url;
+};

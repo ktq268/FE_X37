@@ -9,6 +9,7 @@ import {
   staffGetOrders,
   staffUpdateOrderStatus,
   getOrders,
+  createInvoiceFromOrder, exportInvoicePdf 
 } from "../api/api.js";
 import {
   Clock,
@@ -1021,10 +1022,31 @@ const staffPage = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <button className="bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm">
-                  <Printer size={16} />
-                  In bill
-                </button>
+                <button
+  onClick={async () => {
+    try {
+      if (!order?.id) {
+        alert("Không tìm thấy order hợp lệ để in!");
+        return;
+      }
+
+      // 1️⃣ Tạo invoice từ order
+      const invoice = await createInvoiceFromOrder(order.id, token);
+
+      // 2️⃣ Lấy link PDF và mở tab in
+      const pdfUrl = await exportInvoicePdf(invoice._id, token);
+      window.open(pdfUrl, "_blank");
+    } catch (err) {
+      console.error("Print invoice error:", err);
+      alert("Không thể in hóa đơn!");
+    }
+  }}
+  className="bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm"
+>
+  <Printer size={16} />
+  In bill
+</button>
+
                 <button
                   onClick={async () => {
                     try {
