@@ -282,21 +282,21 @@ export async function getOrders(query = {}, token) {
 
 // Tạo hóa đơn từ order
 export const createInvoiceFromOrder = async (orderId, token) => {
-  const res = await fetch(`${import.meta.env.VITE_API_URL}/api/invoices`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+  return request(
+    `/api/invoices`,
+    {
+      method: "POST",
+      body: JSON.stringify({ orderId }),
     },
-    body: JSON.stringify({ orderId }),
-  });
-  if (!res.ok) throw new Error("Không tạo được hóa đơn");
-  return res.json();
+    token
+  );
 };
 
-// Xuất PDF hóa đơn
+// Xuất PDF hóa đơn (/:id/export-pdf)
 export const exportInvoicePdf = async (invoiceId, token) => {
-  const url = `${import.meta.env.VITE_API_URL}/api/invoices/${invoiceId}/export-pdf`;
-  // chỉ trả về URL để frontend mở tab mới
-  return url;
+  return request(
+    `/api/invoices/${invoiceId}/export-pdf`,
+    { method: "GET" },
+    token
+  );
 };

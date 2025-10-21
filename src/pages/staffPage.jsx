@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import html2pdf from "html2pdf.js";
 import {
   getTables,
   updateTableStatusById,
@@ -9,7 +10,7 @@ import {
   staffGetOrders,
   staffUpdateOrderStatus,
   getOrders,
-  createInvoiceFromOrder, exportInvoicePdf 
+  createInvoiceFromOrder,
 } from "../api/api.js";
 import {
   Clock,
@@ -42,6 +43,8 @@ const staffPage = () => {
   const [filterStatus, setFilterStatus] = useState("pending");
   const [showTableModal, setShowTableModal] = useState(false);
   const [showOrderDetailModal, setShowOrderDetailModal] = useState(false);
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [billOrder, setBillOrder] = useState(null);
 
   const [orders, setOrders] = useState([]);
   const [ordersList, setOrdersList] = useState([]);
@@ -1023,23 +1026,9 @@ const staffPage = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <button
-  onClick={async () => {
-    try {
-      if (!order?.id) {
-        alert("Không tìm thấy order hợp lệ để in!");
-        return;
-      }
-
-      // 1️⃣ Tạo invoice từ order
-      const invoice = await createInvoiceFromOrder(order.id, token);
-
-      // 2️⃣ Lấy link PDF và mở tab in
-      const pdfUrl = await exportInvoicePdf(invoice._id, token);
-      window.open(pdfUrl, "_blank");
-    } catch (err) {
-      console.error("Print invoice error:", err);
-      alert("Không thể in hóa đơn!");
-    }
+  onClick={() => {
+    setBillOrder(order);
+    setShowBillModal(true);
   }}
   className="bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm"
 >
@@ -1403,6 +1392,171 @@ const staffPage = () => {
     );
   };
 
+  const BillModal = () => {
+    if (!showBillModal || !billOrder) return null;
+    const [isExporting, setIsExporting] = useState(false);
+    const billRef = useRef(null);
+
+    const handleExportPDF = async () => {
+      setIsExporting(true);
+      try {
+        const orderId = billOrder.id || billOrder._id;
+        if (!orderId) {
+          alert("Không tìm thấy order hợp lệ để xuất PDF!");
+          return;
+        }
+
+        const element = billRef.current;
+        if (!element) {
+          alert("Không tìm thấy nội dung hóa đơn!");
+          return;
+        }
+
+        // 1️⃣ Gọi API để tạo invoice record trong database
+        await createInvoiceFromOrder(orderId, token);
+
+        // 2️⃣ Cấu hình cho html2pdf
+        const opt = {
+          margin: 10,
+          filename: `hoa-don-${orderId}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // 3️⃣ Tạo PDF từ HTML ở FE
+        await html2pdf().set(opt).from(element).save();
+      } catch (err) {
+        console.error("Export PDF error:", err);
+        alert("Không thể xuất PDF!");
+      } finally {
+        setIsExporting(false);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+            <h3 className="text-2xl font-bold">Hóa đơn #{billOrder.id || billOrder._id}</h3>
+            <button
+              onClick={() => setShowBillModal(false)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="p-6" ref={billRef}>
+            {/* Restaurant Info */}
+            <div className="text-center mb-6 border-b pb-4">
+              <h2 className="text-2xl font-bold text-gray-800">{selectedRestaurant?.name || "Nhà hàng"}</h2>
+              <p className="text-sm text-gray-600">{selectedRestaurant?.address || ""}</p>
+              <p className="text-sm text-gray-600">Tel: {selectedRestaurant?.phone || ""}</p>
+            </div>
+
+            {/* Bill Title */}
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">HÓA ĐƠN THANH TOÁN</h3>
+              <p className="text-sm text-gray-600">#{billOrder.id || billOrder._id}</p>
+              <p className="text-sm text-gray-600">{new Date(billOrder.createdAt).toLocaleString('vi-VN')}</p>
+            </div>
+
+            {/* Customer & Table Info */}
+            <div className="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg">
+              <div>
+                <p className="text-sm text-gray-600">Khách hàng:</p>
+                <p className="font-medium text-gray-800">{billOrder.customerName || "Khách lẻ"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Bàn số:</p>
+                <p className="font-medium text-gray-800">{billOrder.tableNumber}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Nhân viên:</p>
+                <p className="font-medium text-gray-800">{staffInfo?.name || staffInfo?.username || "Staff"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Thời gian:</p>
+                <p className="font-medium text-gray-800">{new Date(billOrder.createdAt).toLocaleTimeString('vi-VN')}</p>
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div className="mb-6">
+              <table className="w-full">
+                <thead className="bg-gray-100 border-b-2 border-gray-300">
+                  <tr>
+                    <th className="text-left p-3 font-semibold">Món</th>
+                    <th className="text-center p-3 font-semibold">SL</th>
+                    <th className="text-right p-3 font-semibold">Đơn giá</th>
+                    <th className="text-right p-3 font-semibold">Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {billOrder.items.map((item, idx) => (
+                    <tr key={idx} className="border-b border-gray-200">
+                      <td className="p-3">
+                        <div className="font-medium">{item.name}</div>
+                        {item.note && <div className="text-sm text-gray-500 italic">{item.note}</div>}
+                      </td>
+                      <td className="text-center p-3">{item.quantity}</td>
+                      <td className="text-right p-3">{item.price.toLocaleString()}đ</td>
+                      <td className="text-right p-3 font-medium">{(item.price * item.quantity).toLocaleString()}đ</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Note */}
+            {billOrder.note && (
+              <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                <p className="text-sm font-medium text-gray-700">Ghi chú:</p>
+                <p className="text-sm text-gray-600">{billOrder.note}</p>
+              </div>
+            )}
+
+            {/* Total */}
+            <div className="border-t-2 border-gray-300 pt-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-600">Tạm tính:</span>
+                <span className="font-medium text-lg">{billOrder.total.toLocaleString()}đ</span>
+              </div>
+              <div className="flex justify-between items-center text-xl font-bold text-gray-800 mt-4">
+                <span>TỔNG CỘNG:</span>
+                <span className="text-blue-600">{billOrder.total.toLocaleString()}đ</span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="mt-6 pt-4 border-t text-center text-sm text-gray-600">
+              <p>Cảm ơn quý khách! Hẹn gặp lại!</p>
+            </div>
+          </div>
+
+          {/* Export Button */}
+          <div className="p-6 pt-0 flex gap-4">
+            <button
+              onClick={() => setShowBillModal(false)}
+              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-bold transition"
+            >
+              Đóng
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={isExporting}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+            >
+              <Printer size={20} />
+              {isExporting ? "Đang xuất..." : "Export to PDF"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       <div className="flex-1 overflow-hidden p-4">
@@ -1503,6 +1657,7 @@ const staffPage = () => {
 
       <TableModal />
       <OrderDetailModal />
+      <BillModal />
     </div>
   );
 };
