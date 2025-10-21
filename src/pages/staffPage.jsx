@@ -159,7 +159,7 @@ const loadPendingNotifications = async () => {
     setLoadingOrders(true);
     setErrorMessage('');
     try {
-      const res = await getBookingsByTable(table.id || table._id || table.tableNumber, {}, token);
+      const res = await getBookingsByTable(table.id || table._id || table.tableNumber, { date: selectedDate }, token);
       const list = Array.isArray(res) ? res : (res?.bookings || []);
       setOrders(list.map(mapBookingToOrder));
     } catch (e) {
@@ -831,9 +831,29 @@ const loadPendingNotifications = async () => {
               <h4 className="font-bold">Chuyển trạng thái:</h4>
               
               <button
-                onClick={() => {
-                  changeTableStatus(selectedTable.tableNumber, 'available');
-                  setShowTableModal(false);
+                onClick={async () => {
+                  try {
+                    // Cancel all active bookings for this table
+                    const activeBookings = orders.filter(order => 
+                      order.status !== 'completed' && 
+                      String(order.tableNumber) === String(selectedTable.tableNumber)
+                    );
+                    
+                    // Cancel each active booking
+                    for (const booking of activeBookings) {
+                      await updateBookingStatus(booking.bookingId || booking.id, 'cancelled', token);
+                    }
+                    
+                    // Then update table status to available
+                    await changeTableStatus(selectedTable.tableNumber, 'available');
+                    
+                    // Refresh orders for this table
+                    await refreshOrdersForTable(selectedTable);
+                    
+                    setShowTableModal(false);
+                  } catch (e) {
+                    alert(e.message || 'Không thể hủy booking và đặt bàn trống');
+                  }
                 }}
                 className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
                 disabled={selectedTable.status === 'available'}
@@ -843,9 +863,29 @@ const loadPendingNotifications = async () => {
               </button>
               
               <button
-                onClick={() => {
-                  changeTableStatus(selectedTable.tableNumber, 'occupied');
-                  setShowTableModal(false);
+                onClick={async () => {
+                  try {
+                    // Update all pending/confirmed bookings for this table to seated
+                    const activeBookings = orders.filter(order => 
+                      (order.status === 'pending' || order.status === 'preparing') && 
+                      String(order.tableNumber) === String(selectedTable.tableNumber)
+                    );
+                    
+                    // Update each booking to seated
+                    for (const booking of activeBookings) {
+                      await updateBookingStatus(booking.bookingId || booking.id, 'seated', token);
+                    }
+                    
+                    // Then update table status to occupied
+                    await changeTableStatus(selectedTable.tableNumber, 'occupied');
+                    
+                    // Refresh orders for this table
+                    await refreshOrdersForTable(selectedTable);
+                    
+                    setShowTableModal(false);
+                  } catch (e) {
+                    alert(e.message || 'Không thể cập nhật trạng thái khách đang dùng');
+                  }
                 }}
                 className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
                 disabled={selectedTable.status === 'occupied' || selectedTable.status === 'blocked'}
@@ -908,9 +948,29 @@ const loadPendingNotifications = async () => {
                 <div className="border-t pt-3">
                   <h4 className="font-bold mb-2 text-red-600">Bàn đã bị khóa</h4>
                   <button
-                    onClick={() => {
-                      changeTableStatus(selectedTable.tableNumber, 'available');
-                      setShowTableModal(false);
+                    onClick={async () => {
+                      try {
+                        // Cancel all active bookings for this table
+                        const activeBookings = orders.filter(order => 
+                          order.status !== 'completed' && 
+                          String(order.tableNumber) === String(selectedTable.tableNumber)
+                        );
+                        
+                        // Cancel each active booking
+                        for (const booking of activeBookings) {
+                          await updateBookingStatus(booking.bookingId || booking.id, 'cancelled', token);
+                        }
+                        
+                        // Then update table status to available
+                        await changeTableStatus(selectedTable.tableNumber, 'available');
+                        
+                        // Refresh orders for this table
+                        await refreshOrdersForTable(selectedTable);
+                        
+                        setShowTableModal(false);
+                      } catch (e) {
+                        alert(e.message || 'Không thể mở khóa bàn');
+                      }
                     }}
                     className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
                   >
