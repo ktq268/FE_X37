@@ -10,9 +10,8 @@ const staffPage = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showTableModal, setShowTableModal] = useState(false);
   const [showOrderDetailModal, setShowOrderDetailModal] = useState(false);
-  
+  const [pendingCount, setPendingCount] = useState(0);
   const [orders, setOrders] = useState([]);
-
   const [tables, setTables] = useState([]);
   const [loadingTables, setLoadingTables] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -144,6 +143,16 @@ const refreshTables = async (query = {}) => {
   }
 };
 
+const loadPendingNotifications = async () => {
+  try {
+    const data = await getPendingBookings(token);
+    const pendingBookings = Array.isArray(data) ? data : (data?.bookings || []);
+    setPendingCount(pendingBookings.length);
+  } catch (e) {
+    console.error("Error loading pending bookings:", e);
+  }
+};
+
 
   const refreshOrdersForTable = async (table) => {
     if (!table) return;
@@ -166,11 +175,16 @@ const refreshTables = async (query = {}) => {
     updateDateTime();
     loadRestaurants();
     refreshTables({});
+    loadPendingNotifications();
     
     // Update time every minute
-    const interval = setInterval(updateDateTime, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const interval = setInterval(() => {
+    updateDateTime();
+    loadPendingNotifications();
+  }, 30000);
+
+  return () => clearInterval(interval);
+}, []);
 
   const statusConfig = {
     pending: { label: 'Chờ XN', color: 'bg-red-500', textColor: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-300' },
@@ -248,26 +262,39 @@ const refreshTables = async (query = {}) => {
 
   const changeTableStatus = async (tableNumber, newStatus, customerInfo = null) => {
     try {
-      // Tìm bàn theo số bàn
       const table = tables.find(t => String(t.tableNumber) === String(tableNumber));
-      if (!table) {
-        throw new Error(`Không tìm thấy bàn số ${tableNumber}`);
+      if (!table) throw new Error(`Không tìm thấy bàn số ${tableNumber}`);
+  
+      const tableId = table._id || table.id;
+      if (!tableId) throw new Error(`Không tìm thấy ID của bàn ${tableNumber}`);
+  
+      console.log('Changing table status:', { tableNumber, newStatus, tableId });
+  
+      // Cập nhật trạng thái trên server
+      await updateTableStatusById(tableId, newStatus, token);
+
+      // Gọi lại API để đồng bộ trạng thái bàn mới nhất
+      await refreshTables(selectedRestaurant ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id } : {});
+
+      if (newStatus === 'available' || newStatus === 'reserved') {
+        await refreshTables(
+          selectedRestaurant
+            ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id }
+            : {}
+        );
       }
+
+      // Đồng thời cập nhật local state để UI phản ứng nhanh
+      setTables(prev =>
+        prev.map(t => {
+          const tid = t._id || t.id;
+          return tid === tableId ? { ...t, status: newStatus } : t;
+        })
+      );
       
-      console.log('Changing table status:', { tableNumber, newStatus, tableId: table.id, table });
-      
-      // Kiểm tra table.id có tồn tại không
-      if (!table.id) {
-        throw new Error(`Table ID không tồn tại cho bàn số ${tableNumber}`);
-      }
-      
-      // Sử dụng id của bàn để cập nhật
-      await updateTableStatusById(table.id, newStatus, token);
-      
-      // Refresh lại danh sách bàn
-      await refreshTables({});
-      
-      // Nếu đang xem orders của bàn này thì refresh lại orders
+
+  
+      // Nếu đang xem bàn này thì load lại order
       if (currentOrdersTable && String(currentOrdersTable.tableNumber) === String(tableNumber)) {
         await refreshOrdersForTable(table);
       }
@@ -1067,14 +1094,25 @@ const refreshTables = async (query = {}) => {
             <span className="text-xs font-medium">Bàn</span>
           </button>
           <button
-            onClick={() => setCurrentPage('notifications')}
-            className={`flex-1 py-4 flex flex-col items-center gap-1 transition ${
+            onClick={() => {
+              setCurrentPage('notifications');
+              setPendingCount(0);
+            }}
+            className={`relative flex-1 py-4 flex flex-col items-center gap-1 transition ${
               currentPage === 'notifications' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            <Bell size={24} />
+            <div className="relative">
+              <Bell size={24} />
+              {pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-[5px] py-[1px] font-bold">
+                  {pendingCount}
+                </span>
+              )}
+            </div>
             <span className="text-xs font-medium">Thông báo</span>
           </button>
+            
           <button
             onClick={() => {
               setSelectedOrder(orders[0]);

@@ -1,3 +1,4 @@
+import axios from "axios";
 // api.js (Đã sửa đổi hoàn chỉnh)
 const API_URL = "http://localhost:3000";
 
@@ -18,6 +19,11 @@ async function request(endpoint, options = {}, token = null) {
     });
 
     console.log(`API Response: ${res.status} ${res.statusText}`);
+
+    if (res.status === 304) {
+      console.log("API Response: 304 Not Modified. No new data.");
+      return null; // Indicate no new data, let the caller decide what to do
+    }
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
@@ -177,6 +183,26 @@ export async function createTable(data, token) {
   );
 }
 
+// PUT /api/tables/:id - Cập nhật bàn
+export async function updateTable(id, data, token) {
+  if (!id) throw new Error("table id is required");
+  return request(
+    `/api/tables/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
+    },
+    token
+  );
+}
+
+// DELETE /api/tables/:id - Xóa bàn
+export async function deleteTable(id, token) {
+  if (!id) throw new Error("table id is required");
+  return request(`/api/tables/${id}`, { method: "DELETE" }, token);
+}
+
+
 
 // --- STAFF: BOOKINGS (orders by table) ---
 // GET /api/bookings/table/:tableId?date=YYYY-MM-DD
@@ -211,22 +237,40 @@ export async function updateBookingStatus(
   );
 }
 
-// GET /api/bookings/by-date - Lấy booking theo ngày và giờ
-export async function getBookingsByDate(query = {}, token) {
-  const params = new URLSearchParams(query).toString();
-  return request(
-    `/api/bookings/by-date${params ? `?${params}` : ""}`,
-    { method: "GET" },
-    token
-  );
-}
-
 // GET /api/bookings/restaurant/:restaurantId - Lấy booking theo nhà hàng
 export async function getBookingsByRestaurant(restaurantId, query = {}, token) {
   if (!restaurantId) throw new Error("restaurantId is required");
   const params = new URLSearchParams(query).toString();
   return request(
     `/api/bookings/restaurant/${restaurantId}${params ? `?${params}` : ""}`,
+    { method: "GET" },
+    token
+  );
+}
+
+
+// ADMIN: Dashboard
+export const getFeedbackStats = async (token) => {
+  return request(`/api/reports/feedback`, 
+    { method: "GET" },
+    token
+  );
+};
+
+// --- ADMIN: REVENUE REPORT (Báo cáo doanh thu) ---
+// Endpoint: GET /api/reports/revenue?restaurantId=...&range=...&from=...&to=...
+export async function getRevenueReport(query = {}, token) {
+  const { restaurantId, range, from, to } = query;
+  if (!restaurantId) throw new Error("restaurantId is required");
+
+  const params = new URLSearchParams();
+  params.append("restaurantId", restaurantId);
+  if (range) params.append("range", range);
+  if (from) params.append("from", from);
+  if (to) params.append("to", to);
+
+  return request(
+    `/api/reports/revenue?${params.toString()}`,
     { method: "GET" },
     token
   );
