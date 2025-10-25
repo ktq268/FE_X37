@@ -300,3 +300,18 @@ export const exportInvoicePdf = async (invoiceId, token) => {
     token
   );
 };
+
+// --- FEEDBACK ---
+// Gửi phản hồi cho 1 order
+export async function sendOrderFeedback(orderId, data, token) {
+  if (!orderId) throw new Error("orderId is required");
+  return request(
+    `/api/orders/${orderId}/feedback`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    token
+  );
+}
+

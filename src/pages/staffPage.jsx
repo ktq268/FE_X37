@@ -35,6 +35,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import NotificationsPage from "./NotificationsPage.jsx";
+import { useNavigate } from "react-router-dom";
 
 const staffPage = () => {
   const [currentPage, setCurrentPage] = useState("orders");
@@ -72,6 +73,9 @@ const staffPage = () => {
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  // useNavigate để redirect sau khi thanh toán
+  const navigate = useNavigate();
 
   const beToFeOrderStatus = (status) => {
     switch (status) {
@@ -567,86 +571,86 @@ const staffPage = () => {
   };
 
   const OrdersPage = () => (
-    <div className="h-full flex flex-col">
-      {/* Header Information */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Building className="w-6 h-6" />
-              {selectedRestaurant?.name || "Hệ thống nhà hàng"}
-            </h1>
-            <p className="text-blue-100 text-sm mt-1">{currentDateTime}</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-blue-100">Nhân viên</p>
-              <p className="font-semibold">
-                {staffInfo?.name || staffInfo?.username || "Staff"}
-              </p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Đăng xuất
-            </button>
-          </div>
+  <div className="h-full flex flex-col">
+    {/* Header Information */}
+    <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Building className="w-6 h-6" />
+            {selectedRestaurant?.name || "Hệ thống nhà hàng"}
+          </h1>
+          <p className="text-blue-100 text-sm mt-1">{currentDateTime}</p>
         </div>
-      </div>
-
-      {errorMessage && (
-        <div className="mb-3 p-3 rounded border border-red-300 bg-red-50 text-red-700 text-sm">
-          {errorMessage}
-        </div>
-      )}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Danh sách Order</h2>
-        <div className="flex items-center gap-3">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border rounded-lg px-3 py-1 text-sm bg-white"
-          >
-            <option value="all">Tất cả</option>
-            <option value="pending">Chờ xác nhận</option>
-            <option value="preparing">Đang chế biến</option>
-            <option value="served">Đã phục vụ</option>
-            <option value="completed">Hoàn tất</option>
-          </select>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-sm text-blue-100">Nhân viên</p>
+            <p className="font-semibold">
+              {staffInfo?.name || staffInfo?.username || "Staff"}
+            </p>
+          </div>
           <button
-            onClick={() => {
-              if (currentOrdersTable) {
-                refreshOrdersForTable(currentOrdersTable);
-              }
-              refreshOnlineOrders();
-            }}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+            onClick={handleLogout}
+            className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
           >
-            <RefreshCw className="w-4 h-4" />
-            Làm mới
+            <LogOut className="w-4 h-4 mr-2" />
+            Đăng xuất
           </button>
         </div>
       </div>
-
-      {loadingOrders ? (
-        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
-          Đang tải orders...
-        </div>
-      ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {ordersList.length === 0 ? (
-            <div className="text-gray-500 text-sm">Không có order</div>
-          ) : (
-            ordersList.map((order) => (
-              <CompactOrderCard key={order.id || order._id} order={order} />
-            ))
-          )}
-        </div>
-      )}
     </div>
-  );
+
+    {errorMessage && (
+      <div className="mb-3 p-3 rounded border border-red-300 bg-red-50 text-red-700 text-sm">
+        {errorMessage}
+      </div>
+    )}
+    <div className="flex justify-between items-center mb-4">
+      <h2 className="text-xl font-bold">Danh sách Order</h2>
+      <div className="flex items-center gap-3">
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="border rounded-lg px-3 py-1 text-sm bg-white"
+        >
+          <option value="all">Tất cả</option>
+          <option value="pending">Chờ xác nhận</option>
+          <option value="preparing">Đang chế biến</option>
+          <option value="served">Đã phục vụ</option>
+          <option value="completed">Hoàn tất</option>
+        </select>
+        <button
+          onClick={() => {
+            if (currentOrdersTable) {
+              refreshOrdersForTable(currentOrdersTable);
+            }
+            refreshOnlineOrders();
+          }}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Làm mới
+        </button>
+      </div>
+    </div>
+
+    {loadingOrders ? (
+      <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+        Đang tải orders...
+      </div>
+    ) : (
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {ordersList.length === 0 ? (
+          <div className="text-gray-500 text-sm">Không có order</div>
+        ) : (
+          ordersList.map((order) => (
+            <CompactOrderCard key={order.id || order._id} order={order} />
+          ))
+        )} {/* Added missing closing parenthesis here */}
+      </div>
+    )}
+  </div>
+);
 
   const TablesPage = () => (
     <div className="h-full flex flex-col">
@@ -1023,6 +1027,35 @@ const staffPage = () => {
                   </button>
                 </div>
               </div>
+              {/* Hiển thị mã QR nếu chọn phương thức QR */}
+{paymentMethod === "qr" && (
+  <div className="relative bg-white border rounded-lg p-4 mt-3 text-center shadow-sm">
+    {/* Nút đóng QR */}
+    <button
+      onClick={() => setPaymentMethod("")}
+      className="absolute top-2 right-2 text-gray-500 hover:text-red-500 transition"
+      title="Đóng QR"
+    >
+      ✕
+    </button>
+
+    <h4 className="font-semibold mb-3 text-sm text-gray-700">
+      Quét mã để thanh toán
+    </h4>
+
+    <img
+      src={`https://img.vietqr.io/image/VCB-0123456789-compact.png?amount=${finalTotal}&addInfo=Thanh%20toan%20order%20${order.id}&accountName=Maison%20de%20Flavors`}
+      alt="QR VietQR"
+      className="mx-auto w-56 h-56 object-contain border rounded-lg shadow-sm"
+    />
+
+    <p className="text-xs text-gray-500 mt-2">
+      Chủ TK: <b>Maison de Flavors</b> — Vietcombank
+    </p>
+    <p className="text-xs text-gray-500">Số TK: 0123456789</p>
+  </div>
+)}
+
 
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -1039,9 +1072,15 @@ const staffPage = () => {
                 <button
                   onClick={async () => {
                     try {
-                      await updateOrderStatus(order.id, "completed");
-                      alert("Thanh toán thành công!");
+                      // lấy ID chính xác theo thứ tự ưu tiên
+                      const orderId = order.bookingId || order.id || order._id;
+                      console.log("Completing order:", orderId, order);
+                      if (!orderId) throw new Error("Không tìm thấy ID của order");
+                      await updateOrderStatus(orderId, "completed");
+                      // redirect sang trang feedback để KH có thể đánh giá
+                      navigate(`/feedback?orderId=${encodeURIComponent(orderId)}`);
                     } catch (e) {
+                      console.error("Payment error:", e);
                       alert(e.message || "Thanh toán thất bại");
                     }
                   }}

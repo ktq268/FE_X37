@@ -16,6 +16,7 @@ import MenuPage from "./pages/MenuPage";
 import CartPage from "./pages/CartPage";
 import OrdersPage from "./pages/OrdersPage";
 import OrderDetailPage from "./pages/OrderDetailPage";
+import FeedbackPage from "./pages/FeedbackPage";
 
 function StaffOnlyRoute({ children }) {
   const token =
@@ -38,7 +39,7 @@ function StaffOnlyRoute({ children }) {
   }
   return children;
 }
-``;
+;
 
 function App() {
   return (
@@ -58,6 +59,7 @@ function App() {
                 </StaffOnlyRoute>
               }
             />
+            <Route path="/feedback" element={<FeedbackPage />} />
             <Route path="/menu" element={<MenuPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/orders" element={<OrdersPage />} />
