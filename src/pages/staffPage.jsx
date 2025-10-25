@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings, getRestaurants } from '../api/api.js';
+import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings, getRestaurants, getOrders } from '../api/api.js';
 import { Building, LogOut } from 'lucide-react';
 import NotificationsPage from './NotificationsPage.jsx';
 import { useNotification } from '../hooks/useNotification.js';
@@ -28,14 +28,13 @@ const staffPage = () => {
   const [orders, setOrders] = useState([]);
   const [ordersList, setOrdersList] = useState([]);
   const [onlineOrders, setOnlineOrders] = useState([]);
-  const [filteredOrders, setFilteredOrders] = useState([]);
 
   const [tables, setTables] = useState([]);
   const [loadingTables, setLoadingTables] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [currentOrdersTable, setCurrentOrdersTable] = useState(null);
-
+  const [filteredOrders, setFilteredOrders] = useState([]);
   // Restaurant and staff info
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRegion, setSelectedRegion] = useState("");
@@ -321,6 +320,16 @@ const loadPendingNotifications = async () => {
       setLoadingOrders(false);
     }
   };
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+  useEffect(() => {
+    if (filterStatus === "all") {
+      setFilteredOrders(ordersList);
+    } else {
+      setFilteredOrders(ordersList.filter(order => order.status === filterStatus));
+    }
+  }, [ordersList, filterStatus]);
 
   useEffect(() => {
     loadStaffInfo();
