@@ -310,6 +310,7 @@ const loadPendingNotifications = async () => {
         query.status = filterStatus;
       }
       const res = await getOrders(query, token);
+      console.log("🚀 ~ fetchOrders ~ query:", query)
       const list = Array.isArray(res) ? res : res?.orders || [];
       setOrdersList(list);
     } catch (err) {
@@ -322,7 +323,7 @@ const loadPendingNotifications = async () => {
   };
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [filterStatus]);
   useEffect(() => {
     if (filterStatus === "all") {
       setFilteredOrders(ordersList);
@@ -856,7 +857,7 @@ const loadPendingNotifications = async () => {
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
             >
               <Printer size={20} />
-              {isExporting ? "Đang xuất..." : "Export to PDF"}
+              {isExporting ? "Đang xuất..." : "Export to PDF"}setFilterStatus
             </button>
           </div>
         </div>
