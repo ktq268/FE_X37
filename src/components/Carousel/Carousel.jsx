@@ -3,7 +3,7 @@ import { Carousel } from 'antd';
 
 const CarouselComponent = () => {
   const onChange = (currentSlide) => {
-    console.log(currentSlide);
+    // Slide changed
   };
 
   // Danh sách slide với hình ảnh và nội dung

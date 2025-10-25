@@ -9,6 +9,8 @@ import {
   Users,
 } from "lucide-react";
 import { getMenuItems, getMenuItemDetail, getFullMenu } from "../api/api";
+import { useCart } from "../contexts/CartContext";
+import { useToast } from "../contexts/ToastContext";
 import Header from "../components/Header/Header";
 import Footer from "../components/Footer/Footer";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -20,18 +22,30 @@ export default function MenuPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { addToCart } = useCart();
+  const { showSuccess } = useToast();
 
   // Helper: cố gắng lấy URL ảnh từ các field phổ biến
   const getItemImage = (item) => {
+    // Nếu imageUrl là mảng, lấy phần tử đầu tiên
+    if (Array.isArray(item?.imageUrl) && item.imageUrl.length > 0) {
+      return item.imageUrl[0];
+    }
+  
+    // Nếu là chuỗi, trả về trực tiếp
+    if (typeof item?.imageUrl === "string") {
+      return item.imageUrl;
+    }
+  
+    // Dự phòng các key khác
     return (
-      item?.imageUrl ||
       item?.image ||
       item?.thumbnail ||
       (Array.isArray(item?.images) && item.images[0]) ||
       item?.photo ||
       null
     );
-  };
+  };  
 
   // load menu đầy đủ khi vào page (không pagination)
   useEffect(() => {
@@ -77,23 +91,16 @@ export default function MenuPage() {
     }
   }
 
-  // Thêm vào giỏ hàng (localStorage)
-  function addToCart(item) {
+  // Thêm vào giỏ hàng
+  const handleAddToCart = async (item) => {
     try {
-      const existing = JSON.parse(localStorage.getItem("cart") || "[]");
-      const index = existing.findIndex((x) => x._id === item._id);
-      if (index >= 0) {
-        existing[index].quantity = (existing[index].quantity || 1) + 1;
-      } else {
-        existing.push({ ...item, quantity: 1 });
-      }
-      localStorage.setItem("cart", JSON.stringify(existing));
-      // đóng modal sau khi thêm để chuẩn bị order sau này
+      await addToCart(item, 1);
+      showSuccess(`${item.name} đã được thêm vào giỏ hàng!`);
       setSelectedItem(null);
     } catch (e) {
       console.error("Add to cart failed", e);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -296,18 +303,35 @@ export default function MenuPage() {
                 <X className="w-5 h-5 text-gray-600" />
               </button>
               <div className="h-64 relative">
-                {getItemImage(selectedItem) ? (
+                {Array.isArray(selectedItem?.imageUrl) && selectedItem.imageUrl.length > 0 ? (
+                  <Swiper
+                    spaceBetween={8}
+                    slidesPerView={1}
+                    className="w-full h-full rounded-2xl overflow-hidden"
+                  >
+                    {selectedItem.imageUrl.map((img, idx) => (
+                      <SwiperSlide key={idx}>
+                        <img
+                          src={img}
+                          alt={`${selectedItem.name}-${idx}`}
+                          className="w-full h-64 object-cover"
+                        />
+                      </SwiperSlide>
+                    ))}
+                  </Swiper>
+                ) : getItemImage(selectedItem) ? (
                   <img
                     src={getItemImage(selectedItem)}
                     alt={selectedItem.name}
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full object-cover rounded-2xl"
                   />
                 ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-red-100 flex items-center justify-center rounded-2xl">
                     <ChefHat className="w-20 h-20 text-orange-400" />
                   </div>
                 )}
               </div>
+              
               <div className="p-8">
                 <h2 className="text-3xl font-bold text-gray-800 mb-4">
                   {selectedItem.name}
@@ -339,7 +363,7 @@ export default function MenuPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <button
-                    onClick={() => addToCart(selectedItem)}
+                    onClick={() => handleAddToCart(selectedItem)}
                     className="w-full bg-orange-500 text-white py-4 rounded-lg hover:bg-orange-600 transition-colors font-medium text-lg"
                   >
                     Thêm vào giỏ
