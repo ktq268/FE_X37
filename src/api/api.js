@@ -283,3 +283,133 @@ export async function getRevenueReport(query = {}, token) {
     token
   );
 }
+
+// --- CART ---
+export async function getCart(token) {
+  return request(`/api/cart`, { method: "GET" }, token);
+}
+
+export async function addCartItem(
+  { menuItemId, quantity = 1, notes = "" },
+  token
+) {
+  if (!menuItemId) throw new Error("menuItemId is required");
+  return request(
+    `/api/cart/items`,
+    { method: "POST", body: JSON.stringify({ menuItemId, quantity, notes }) },
+    token
+  );
+}
+
+export async function updateCartItem(
+  menuItemId,
+  { quantity, notes = "" },
+  token
+) {
+  if (!menuItemId) throw new Error("menuItemId is required");
+  return request(
+    `/api/cart/items/${menuItemId}`,
+    { method: "PUT", body: JSON.stringify({ quantity, notes }) },
+    token
+  );
+}
+
+export async function removeCartItem(menuItemId, token) {
+  if (!menuItemId) throw new Error("menuItemId is required");
+  return request(`/api/cart/items/${menuItemId}`, { method: "DELETE" }, token);
+}
+
+export async function clearCart(token) {
+  return request(`/api/cart/clear`, { method: "DELETE" }, token);
+}
+
+// --- ORDERS ---
+export async function createOrderFromCart(body = {}, token) {
+  return request(
+    `/api/orders/from-cart`,
+    { method: "POST", body: JSON.stringify(body) },
+    token
+  );
+}
+
+export async function getMyOrders(token) {
+  return request(`/api/orders/mine`, { method: "GET" }, token);
+}
+
+export async function getOrderDetail(orderId, token) {
+  if (!orderId) throw new Error("orderId is required");
+  return request(`/api/orders/${orderId}`, { method: "GET" }, token);
+}
+
+// --- STAFF ORDERS ---
+export async function staffGetOrders(query = {}, token) {
+  const params = new URLSearchParams(query).toString();
+  return request(
+    `/api/orders${params ? `?${params}` : ""}`,
+    { method: "GET" },
+    token
+  );
+}
+
+export async function staffGetOrderDetail(orderId, token) {
+  if (!orderId) throw new Error("orderId is required");
+  return request(`/api/orders/${orderId}/detail`, { method: "GET" }, token);
+}
+
+export async function staffUpdateOrderStatus(orderId, status, token) {
+  if (!orderId) throw new Error("orderId is required");
+  if (!status) throw new Error("status is required");
+  return request(
+    `/api/orders/${orderId}/status`,
+    { method: "PUT", body: JSON.stringify({ status }) },
+    token
+  );
+}
+
+// Generic orders fetcher with optional query and token
+export async function getOrders(query = {}, token) {
+  const params = new URLSearchParams(query).toString();
+  return request(
+    `/api/orders${params ? `?${params}` : ""}`,
+    { method: "GET" },
+    token
+  );
+}
+
+// ===== INVOICE APIs =====
+
+// Tạo hóa đơn từ order
+export const createInvoiceFromOrder = async (orderId, token) => {
+  return request(
+    `/api/invoices`,
+    {
+      method: "POST",
+      body: JSON.stringify({ orderId }),
+    },
+    token
+  );
+};
+
+// Xuất PDF hóa đơn (/:id/export-pdf)
+export const exportInvoicePdf = async (invoiceId, token) => {
+  return request(
+    `/api/invoices/${invoiceId}/export-pdf`,
+    { method: "GET" },
+    token
+  );
+};
+
+// --- FEEDBACK ---
+// Gửi phản hồi cho 1 order
+export async function sendOrderFeedback(orderId, data, token) {
+  if (!orderId) throw new Error("orderId is required");
+  return request(
+    `/api/orders/${orderId}/feedback`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    token
+  );
+}
+
