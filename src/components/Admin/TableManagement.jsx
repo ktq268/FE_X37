@@ -83,6 +83,16 @@ const TableManagement = () => {
     { title: "Số bàn", dataIndex: "tableNumber", key: "tableNumber" },
     { title: "Sức chứa", dataIndex: "capacity", key: "capacity" },
     {
+      title: "Loại bàn",
+      dataIndex: "type",
+      key: "type",
+      render: (val) => (
+        <Tag color={val === "vip" ? "gold" : "blue"}>
+          {val === "vip" ? "VIP" : "Normal"}
+        </Tag>
+      ),
+    },
+    {
       title: "Trạng thái",
       dataIndex: "status",
       key: "status",

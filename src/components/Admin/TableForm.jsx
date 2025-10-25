@@ -51,13 +51,15 @@ const TableForm = ({ restaurantId, initialData, onSuccess }) => {
         <InputNumber min={1} style={{ width: "100%" }} />
       </Form.Item>
 
-      <Form.Item label="Trạng thái" name="status">
+      <Form.Item 
+        label="Trạng thái" 
+        name="status"
+        extra="Lưu ý: Trạng thái 'Đã đặt' và 'Đang phục vụ' sẽ được tự động cập nhật theo booking"
+      >
         <Select
           options={[
             { label: "Trống", value: "available" },
-            { label: "Đã đặt", value: "reserved" },
-            { label: "Đang phục vụ", value: "occupied" },
-            { label: "Khóa", value: "locked" },
+            { label: "Khóa", value: "blocked" },
           ]}
         />
       </Form.Item>
@@ -65,7 +67,7 @@ const TableForm = ({ restaurantId, initialData, onSuccess }) => {
       <Form.Item label="Loại bàn" name="type">
         <Select
           options={[
-            { label: "Thường", value: "standard" },
+            { label: "Normal", value: "normal" },
             { label: "VIP", value: "vip" },
           ]}
         />

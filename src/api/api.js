@@ -10,7 +10,6 @@ async function request(endpoint, options = {}, token = null) {
   };
 
   const url = `${API_URL}${endpoint}`;
-  console.log(`API Request: ${options.method || "GET"} ${url}`);
 
   try {
     const res = await fetch(url, {
@@ -18,10 +17,8 @@ async function request(endpoint, options = {}, token = null) {
       headers,
     });
 
-    console.log(`API Response: ${res.status} ${res.statusText}`);
 
     if (res.status === 304) {
-      console.log("API Response: 304 Not Modified. No new data.");
       return null; // Indicate no new data, let the caller decide what to do
     }
 
@@ -34,7 +31,6 @@ async function request(endpoint, options = {}, token = null) {
     }
 
     const data = await res.json();
-    console.log("API Success:", data);
     return data;
   } catch (error) {
     console.error("API Request Error:", error);
@@ -163,13 +159,13 @@ export async function getTables(query = {}, token) {
   );
 }
 
-// PATCH /api/tables/:id/status { status }
-export async function updateTableStatusById(tableId, status, token) {
+// PATCH /api/tables/:id/status { status, date }
+export async function updateTableStatusById(tableId, status, token, additionalData = {}) {
   if (!tableId) throw new Error("tableId is required");
   if (!status) throw new Error("status is required");
   return request(
     `/api/tables/${tableId}/status`,
-    { method: "PATCH", body: JSON.stringify({ status }) },
+    { method: "PATCH", body: JSON.stringify({ status, ...additionalData }) },
     token
   );
 }
@@ -217,8 +213,20 @@ export async function getBookingsByTable(tableId, query = {}, token) {
 }
 
 // GET /api/bookings/pending - Lấy tất cả booking đang chờ xử lý
-export async function getPendingBookings(token) {
-  return request(`/api/bookings/pending`, { method: "GET" }, token);
+export async function getPendingBookings(token, filters = {}) {
+  const { restaurantId, region } = filters;
+  const params = new URLSearchParams();
+  
+  if (restaurantId && restaurantId !== "all") {
+    params.append("restaurantId", restaurantId);
+  }
+  
+  if (region && region !== "all") {
+    params.append("region", region);
+  }
+  
+  const queryString = params.toString();
+  return request(`/api/bookings/pending${queryString ? `?${queryString}` : ""}`, { method: "GET" }, token);
 }
 
 // PATCH /api/bookings/:id/status { status, tableId? }

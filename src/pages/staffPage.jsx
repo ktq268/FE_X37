@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings, getRestaurants } from '../api/api.js';
-import { Clock, Users, ChefHat, CheckCircle, AlertCircle, Printer, CreditCard, Wallet, QrCode, X, Filter, Lock, Unlock, Edit, Eye, Bell, MapPin, Building, LogOut, RefreshCw,} from 'lucide-react';
+import { Building, LogOut } from 'lucide-react';
 import NotificationsPage from './NotificationsPage.jsx';
+import { useNotification } from '../hooks/useNotification.js';
+
+// Import các component mới
+import {
+  OrdersPage,
+  TablesPage,
+  InvoicePage,
+  TableModal,
+  OrderDetailModal,
+  Navigation
+} from '../components/Staff';
 
 const staffPage = () => {
   const [currentPage, setCurrentPage] = useState('orders');
@@ -27,8 +38,11 @@ const staffPage = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTime, setSelectedTime] = useState(new Date().toTimeString().slice(0, 5));
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [refreshTimeout, setRefreshTimeout] = useState(null);
+  const [lastApiCall, setLastApiCall] = useState(0);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const { showSuccess, showError, showOrder, showWarning } = useNotification();
 
   const beToFeOrderStatus = (status) => {
     switch (status) {
@@ -112,39 +126,68 @@ const staffPage = () => {
     window.location.href = '/';
   };
 
-  // Hàm load bàn
-const refreshTables = async (query = {}) => {
-  setLoadingTables(true);
-  setErrorMessage('');
+  // Hàm load bàn với debounce
+  const refreshTables = async (query = {}) => {
+    setLoadingTables(true);
+    setErrorMessage('');
 
-  try {
-    const queryWithTime = {
-      ...query,
-      date: query.date || selectedDate,
-    };
+    try {
+      const queryWithTime = {
+        ...query,
+        date: query.date || selectedDate,
+      };
 
-    console.log('Fetching tables with query:', queryWithTime, 'token:', token ? 'present' : 'missing');
+      const data = await getTables(queryWithTime, token);
 
-    const data = await getTables(queryWithTime, token);
-    console.log('Tables API response:', data);
-
-    setTables(Array.isArray(data) ? data : (data?.tables || []));
-    if (!currentOrdersTable && (Array.isArray(data) ? data.length : (data?.tables || []).length)) {
-      const list = Array.isArray(data) ? data : data.tables;
-      const first = list[0];
-      setCurrentOrdersTable(first);
-      await refreshOrdersForTable(first);
+      setTables(Array.isArray(data) ? data : (data?.tables || []));
+      if (!currentOrdersTable && (Array.isArray(data) ? data.length : (data?.tables || []).length)) {
+        const list = Array.isArray(data) ? data : data.tables;
+        const first = list[0];
+        setCurrentOrdersTable(first);
+        await refreshOrdersForTable(first);
+      }
+    } catch (e) {
+      console.error('Error fetching tables:', e);
+      setErrorMessage(e.message || 'Không tải được danh sách bàn');
+    } finally {
+      setLoadingTables(false);
     }
-  } catch (e) {
-    console.error('Error fetching tables:', e);
-    setErrorMessage(e.message || 'Không tải được danh sách bàn');
-  } finally {
-    setLoadingTables(false);
-  }
-};
+  };
+
+  // Debounced refresh function to prevent excessive API calls
+  const debouncedRefreshTables = (query = {}) => {
+    const now = Date.now();
+    const timeSinceLastCall = now - lastApiCall;
+    
+    // Rate limiting: minimum 1 second between API calls
+    if (timeSinceLastCall < 1000) {
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+      
+      const timeout = setTimeout(() => {
+        setLastApiCall(Date.now());
+        refreshTables(query);
+      }, 1000 - timeSinceLastCall);
+      
+      setRefreshTimeout(timeout);
+    } else {
+      setLastApiCall(now);
+      refreshTables(query);
+    }
+  };
 
 const loadPendingNotifications = async () => {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastApiCall;
+  
+  // Rate limiting: minimum 2 seconds between notification API calls
+  if (timeSinceLastCall < 2000) {
+    return;
+  }
+  
   try {
+    setLastApiCall(now);
     const data = await getPendingBookings(token);
     const pendingBookings = Array.isArray(data) ? data : (data?.bookings || []);
     setPendingCount(pendingBookings.length);
@@ -176,15 +219,20 @@ const loadPendingNotifications = async () => {
     loadRestaurants();
     refreshTables({});
     loadPendingNotifications();
-    
-    // Update time every minute
-  const interval = setInterval(() => {
-    updateDateTime();
-    loadPendingNotifications();
-  }, 30000);
 
-  return () => clearInterval(interval);
-}, []);
+    // Update time every minute
+    const interval = setInterval(() => {
+      updateDateTime();
+      loadPendingNotifications();
+    }, 30000);
+
+    return () => {
+      clearInterval(interval);
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+    };
+  }, []); // Empty dependency array to run only once on mount
 
   const statusConfig = {
     pending: { label: 'Chờ XN', color: 'bg-red-500', textColor: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-300' },
@@ -200,53 +248,7 @@ const loadPendingNotifications = async () => {
     occupied: { label: 'Đang dùng', color: 'bg-red-500', textColor: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-300' }
   };
 
-  const CompactOrderCard = ({ order }) => {
-    if (!order) return null;
-    
-    const config = statusConfig[order.status] || statusConfig['pending'];
-    const items = order.items || [];
-    const total = order.total || 0;
-    
-    return (
-      <div 
-        onClick={() => {
-          setSelectedOrder(order);
-          setShowOrderDetailModal(true);
-        }}
-        className={`border-2 ${config.borderColor} rounded-lg p-3 ${config.bgColor} hover:shadow-lg transition-all cursor-pointer min-w-[280px]`}
-      >
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <h3 className="font-bold text-base">#{order.id || 'N/A'}</h3>
-            <div className="text-xs text-gray-600 flex items-center gap-1">
-              <span>Bàn {order.tableNumber || 'N/A'}</span>
-              <span>•</span>
-              <span>{order.createdAt || 'N/A'}</span>
-            </div>
-          </div>
-          <div className={`${config.color} text-white px-2 py-1 rounded text-xs font-medium`}>
-            {config.label}
-          </div>
-        </div>
-        
-        <div className="text-xs mb-2 space-y-1">
-          {items.slice(0, 2).map((item, idx) => (
-            <div key={idx} className="flex justify-between">
-              <span className="truncate">{item.quantity || 0}x {item.name || 'N/A'}</span>
-            </div>
-          ))}
-          {items.length > 2 && (
-            <div className="text-gray-500 italic">+{items.length - 2} món khác</div>
-          )}
-        </div>
-        
-        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-          <div className="font-bold text-sm">{total.toLocaleString()}đ</div>
-          <Eye size={16} className="text-gray-400" />
-        </div>
-      </div>
-    );
-  };
+  // CompactOrderCard đã được tách thành component riêng
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -256,7 +258,10 @@ const loadPendingNotifications = async () => {
       await updateBookingStatus(order.bookingId || orderId, beStatus, token);
       await refreshOrdersForTable(currentOrdersTable);
     } catch (e) {
-      alert(e.message || 'Không cập nhật được trạng thái order');
+      showError(
+        'Cập nhật trạng thái đơn hàng thất bại',
+        e.message || 'Chúng tôi không thể cập nhật trạng thái đơn hàng lúc này. Vui lòng thử lại sau.'
+      );
     }
   };
 
@@ -268,38 +273,24 @@ const loadPendingNotifications = async () => {
       const tableId = table._id || table.id;
       if (!tableId) throw new Error(`Không tìm thấy ID của bàn ${tableNumber}`);
   
-      console.log('Changing table status:', { tableNumber, newStatus, tableId });
-  
-      // Cập nhật trạng thái trên server
-      await updateTableStatusById(tableId, newStatus, token);
+      // Cập nhật trạng thái trên server với thông tin ngày được chọn
+      await updateTableStatusById(tableId, newStatus, token, { date: selectedDate });
 
-      // Gọi lại API để đồng bộ trạng thái bàn mới nhất
-      await refreshTables(selectedRestaurant ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id } : {});
+      // Gọi lại API để đồng bộ trạng thái bàn mới nhất cho ngày được chọn
+      await refreshTables(selectedRestaurant ? { 
+        restaurantId: selectedRestaurant._id || selectedRestaurant.id,
+        date: selectedDate 
+      } : { date: selectedDate });
 
-      if (newStatus === 'available' || newStatus === 'reserved') {
-        await refreshTables(
-          selectedRestaurant
-            ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id }
-            : {}
-        );
-      }
-
-      // Đồng thời cập nhật local state để UI phản ứng nhanh
-      setTables(prev =>
-        prev.map(t => {
-          const tid = t._id || t.id;
-          return tid === tableId ? { ...t, status: newStatus } : t;
-        })
-      );
-      
-
-  
       // Nếu đang xem bàn này thì load lại order
       if (currentOrdersTable && String(currentOrdersTable.tableNumber) === String(tableNumber)) {
         await refreshOrdersForTable(table);
       }
     } catch (e) {
-      alert(e.message || 'Không cập nhật được trạng thái bàn');
+      showError(
+        'Cập nhật trạng thái bàn thất bại',
+        e.message || 'Chúng tôi không thể cập nhật trạng thái bàn lúc này. Vui lòng thử lại sau.'
+      );
     }
   };
 
@@ -321,10 +312,19 @@ const loadPendingNotifications = async () => {
         if (regionRestaurants.length > 0) {
           setSelectedRestaurant(regionRestaurants[0]);
           refreshTables({ restaurantId: regionRestaurants[0]._id || regionRestaurants[0].id });
+        } else {
+          showWarning(
+            'Không có chi nhánh',
+            'Không tìm thấy chi nhánh nào trong miền đã chọn. Vui lòng chọn miền khác.'
+          );
         }
       } catch (e) {
         console.error('Error loading restaurants for region:', e);
         setErrorMessage('Không thể tải danh sách chi nhánh cho miền này');
+        showWarning(
+          'Lỗi tải dữ liệu',
+          'Không thể tải danh sách chi nhánh. Vui lòng thử lại sau.'
+        );
       }
     }
   };
@@ -332,6 +332,12 @@ const loadPendingNotifications = async () => {
   const handleRestaurantChange = (restaurantId) => {
     const restaurant = restaurants.find(r => (r._id || r.id) === restaurantId);
     setSelectedRestaurant(restaurant);
+    if (!restaurant && selectedRegion) {
+      showWarning(
+        'Vui lòng chọn chi nhánh',
+        'Bạn cần chọn chi nhánh để xem danh sách bàn và đơn hàng. Vui lòng chọn chi nhánh từ danh sách.'
+      );
+    }
     refreshTables({ restaurantId });
   };
 
@@ -353,843 +359,239 @@ const loadPendingNotifications = async () => {
   };
 
 
-  const OrdersPage = () => (
-    <div className="h-full flex flex-col">
-      {/* Header Information */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Building className="w-6 h-6" />
-              {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
-            </h1>
-            <p className="text-blue-100 text-sm mt-1">
-              {currentDateTime}
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-blue-100">Nhân viên</p>
-              <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Đăng xuất
-            </button>
-          </div>
-        </div>
-      </div>
+  // OrdersPage đã được tách thành component riêng
 
-      {errorMessage && (
-        <div className="mb-3 p-3 rounded border border-red-300 bg-red-50 text-red-700 text-sm">
-          {errorMessage}
-        </div>
-      )}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Danh sách Order</h2>
-        <div className="flex items-center gap-3">
-          <select 
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border rounded-lg px-3 py-1 text-sm bg-white"
-          >
-            <option value="all">Tất cả</option>
-            <option value="pending">Chờ xác nhận</option>
-            <option value="preparing">Đang chế biến</option>
-            <option value="served">Đã phục vụ</option>
-            <option value="completed">Hoàn tất</option>
-          </select>
-          <button 
-            onClick={() => {
-              if (currentOrdersTable) {
-                refreshOrdersForTable(currentOrdersTable);
-              }
-            }}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Làm mới
-          </button>
-        </div>
-      </div>
-      
-      {loadingOrders ? (
-        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">Đang tải orders...</div>
-      ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {filteredOrders.length === 0 ? (
-            <div className="text-gray-500 text-sm">Không có order</div>
-          ) : (
-            filteredOrders.map(order => (
-              <CompactOrderCard key={order.id} order={order} />
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
+  // TablesPage đã được tách thành component riêng
 
-  const TablesPage = () => (
-    <div className="h-full flex flex-col">
-      {/* Header Information */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Building className="w-6 h-6" />
-              {selectedRestaurant?.name || 'Maison de Flavors '}
-            </h1>
-            <p className="text-blue-100 text-sm mt-1">
-              {currentDateTime}
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-blue-100">Nhân viên</p>
-              <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Đăng xuất
-            </button>
-          </div>
-        </div>
-      </div>
+  // InvoicePage đã được tách thành component riêng
 
-      {errorMessage && (
-        <div className="mb-3 p-3 rounded border border-red-300 bg-red-50 text-red-700 text-sm">
-          {errorMessage}
-        </div>
-      )}
-      
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Quản lý Bàn</h2>
-        <button 
-          onClick={() => refreshTables(selectedRestaurant ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id } : {})}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Làm mới
-        </button>
-      </div>
-      
-      {/* Restaurant Filter */}
-      <div className="bg-white border rounded-lg p-4 mb-4">
-        <h3 className="font-semibold mb-3 flex items-center gap-2">
-          <Filter className="w-5 h-5" />
-          Lọc theo chi nhánh và thời gian
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Miền</label>
-            <select
-              value={selectedRegion}
-              onChange={(e) => handleRegionChange(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              <option value="">Chọn miền</option>
-              {getUniqueRegions().map(region => (
-                <option key={region.value} value={region.value}>{region.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Chi nhánh</label>
-            <select
-              value={selectedRestaurant?._id || selectedRestaurant?.id || ''}
-              onChange={(e) => handleRestaurantChange(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-              disabled={!selectedRegion}
-            >
-              <option value="">Chọn chi nhánh</option>
-              {getRestaurantsByRegion().map(restaurant => (
-                <option key={restaurant._id || restaurant.id} value={restaurant._id || restaurant.id}>
-                  {restaurant.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Ngày</label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => {
-                const newDate = e.target.value;
-                setSelectedDate(newDate);
-                refreshTables({
-                  restaurantId: selectedRestaurant?._id || selectedRestaurant?.id,
-                  date: newDate,
-                });
-              }}
-              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-            />
-          </div>
-          {/* x  */}
-        </div>
-        {selectedRestaurant && (
-          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-center gap-2 text-blue-800">
-              <MapPin className="w-4 h-4" />
-              <span className="font-medium">Đang xem: {selectedRestaurant.name} - {selectedDate}</span>
-            </div>
-          </div>
-        )}
-      </div>
+  // TableModal đã được tách thành component riêng
 
-      {loadingTables ? (
-        <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">Đang tải danh sách bàn...</div>
-      ) : (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 overflow-y-auto">
-          {tables.length === 0 ? (
-            <div className="text-gray-500 text-sm">Không có bàn</div>
-          ) : (
-            tables.map(table => {
-              const config = tableStatusConfig[table.status] || tableStatusConfig['available'];
-              return (
-                <div 
-                  key={table.id || table._id || `table-${table.tableNumber}`}
-                  onClick={async () => {
-                    setSelectedTable(table);
-                    setShowTableModal(true);
-                    setCurrentOrdersTable(table);
-                    await refreshOrdersForTable(table);
-                  }}
-                  className={`border-2 ${config.borderColor} rounded-lg p-3 ${config.bgColor} text-center cursor-pointer hover:shadow-lg transition-all`}
-                >
-                  <div className="font-bold text-lg mb-1">Bàn {table.tableNumber}</div>
-                  <div className={`text-xs ${config.textColor} font-medium mb-1`}>{config.label}</div>
-                  
-                  {/* Hiển thị thông tin booking */}
-                  {table.status === 'reserved' && table.blockedBy && (
-                    <div className="text-xs text-blue-600 font-medium">
-                      📋 {table.blockedBy}
-                    </div>
-                  )}
-                  
-                  {table.status === 'occupied' && table.checkInTime && (
-                    <div className="text-xs text-red-600 font-medium">
-                      👥 {table.checkInTime}
-                    </div>
-                  )}
-                  
-                  {table.status === 'blocked' && table.blockedBy && (
-                    <div className="text-xs text-yellow-600 font-medium">
-                      🔒 {table.blockedBy}
-                    </div>
-                  )}
-                  
-                  {table.orderId && (
-                    <div className="text-xs text-purple-600 font-medium mt-1">#{table.orderId}</div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
+  // OrderDetailModal đã được tách thành component riêng
 
-  const InvoicePage = () => {
-    const order = selectedOrder || orders[0] || {};
-    const [discount, setDiscount] = useState(0);
-    const [paymentMethod, setPaymentMethod] = useState('cash');
-    
-    const subtotal = order.total;
-    const finalTotal = subtotal - discount;
-    
-    return (
-      <div className="h-full flex flex-col">
-        {/* Header Information */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Building className="w-6 h-6" />
-                {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
-              </h1>
-              <p className="text-blue-100 text-sm mt-1">
-                {currentDateTime}
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm text-blue-100">Nhân viên</p>
-                <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
-              </div>
-              <button 
-                onClick={handleLogout}
-                className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Đăng xuất
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Hóa đơn thanh toán</h2>
-          <button 
-            onClick={() => {
-              if (currentOrdersTable) {
-                refreshOrdersForTable(currentOrdersTable);
-              }
-            }}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Làm mới
-          </button>
-        </div>
-        
-        <div className="grid md:grid-cols-2 gap-4 overflow-y-auto flex-1">
-          <div className="space-y-3">
-            <div className="bg-white border rounded-lg p-4">
-              <h3 className="font-bold mb-3 text-sm">Thông tin Order</h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Mã order:</span>
-                  <span className="font-medium">{order.id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Khách hàng:</span>
-                  <span className="font-medium">{order.customerName || 'Khách lẻ'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Bàn số:</span>
-                  <span className="font-medium">{order.tableNumber}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Thời gian:</span>
-                  <span className="font-medium">{order.createdAt}</span>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white border rounded-lg p-4">
-              <h3 className="font-bold mb-3 text-sm">Danh sách món</h3>
-              <div className="space-y-2">
-                {order.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-start text-xs pb-2 border-b">
-                    <div className="flex-1">
-                      <div className="font-medium">{item.name}</div>
-                      {item.note && <div className="text-gray-500">{item.note}</div>}
-                      <div className="text-gray-600">{item.price.toLocaleString()}đ x {item.quantity}</div>
-                    </div>
-                    <div className="font-bold">{(item.price * item.quantity).toLocaleString()}đ</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-              <h3 className="font-bold mb-3 text-sm">Thanh toán</h3>
-              
-              <div className="space-y-2 mb-3 text-sm">
-                <div className="flex justify-between">
-                  <span>Tạm tính:</span>
-                  <span className="font-bold">{subtotal.toLocaleString()}đ</span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span>Giảm giá:</span>
-                  <input 
-                    type="number" 
-                    value={discount}
-                    onChange={(e) => setDiscount(Number(e.target.value))}
-                    className="border rounded px-2 py-1 w-24 text-right text-sm"
-                    placeholder="0"
-                  />
-                </div>
-                
-                <div className="border-t-2 border-blue-300 pt-2 flex justify-between text-lg">
-                  <span className="font-bold">Tổng:</span>
-                  <span className="font-bold text-blue-600">{finalTotal.toLocaleString()}đ</span>
-                </div>
-              </div>
-              
-              <div className="mb-3">
-                <label className="block font-medium mb-2 text-xs">Phương thức:</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => setPaymentMethod('cash')}
-                    className={`p-2 rounded-lg border-2 transition text-xs ${
-                      paymentMethod === 'cash' ? 'border-blue-500 bg-blue-100' : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    <Wallet className="mx-auto mb-1" size={18} />
-                    <div>Tiền mặt</div>
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('card')}
-                    className={`p-2 rounded-lg border-2 transition text-xs ${
-                      paymentMethod === 'card' ? 'border-blue-500 bg-blue-100' : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    <CreditCard className="mx-auto mb-1" size={18} />
-                    <div>Thẻ</div>
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('qr')}
-                    className={`p-2 rounded-lg border-2 transition text-xs ${
-                      paymentMethod === 'qr' ? 'border-blue-500 bg-blue-100' : 'border-gray-200 bg-white'
-                    }`}
-                  >
-                    <QrCode className="mx-auto mb-1" size={18} />
-                    <div>QR</div>
-                  </button>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <button className="bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm">
-                  <Printer size={16} />
-                  In bill
-                </button>
-                <button 
-                  onClick={async () => {
-                    try {
-                      await updateOrderStatus(order.id, 'completed');
-                      alert('Thanh toán thành công!');
-                    } catch (e) {
-                      alert(e.message || 'Thanh toán thất bại');
-                    }
-                  }}
-                  className="bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm"
-                >
-                  <CheckCircle size={16} />
-                  Thanh toán
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  // Handler functions for components
+  const handleOrderClick = (order) => {
+    setSelectedOrder(order);
+    setShowOrderDetailModal(true);
   };
 
-  const TableModal = () => {
-    if (!showTableModal || !selectedTable) return null;
-    const [customerName, setCustomerName] = useState('');
-    const [reservationTime, setReservationTime] = useState('');
-    
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg max-w-md w-full">
-          <div className="border-b p-4 flex justify-between items-center">
-            <h3 className="text-xl font-bold">Bàn số {selectedTable.tableNumber}</h3>
-            <button onClick={() => setShowTableModal(false)} className="text-gray-500 hover:text-gray-700">
-              <X size={24} />
-            </button>
-          </div>
-          
-          <div className="p-4 space-y-4">
-            <div className="bg-gray-50 p-3 rounded-lg">
-              <div className="text-sm text-gray-600 mb-1">Trạng thái hiện tại:</div>
-              <div className="font-bold text-lg">{(tableStatusConfig[selectedTable.status] || tableStatusConfig['available']).label}</div>
-              
-              {/* Hiển thị thông tin booking chi tiết */}
-              {selectedTable.status === 'reserved' && selectedTable.blockedBy && (
-                <div className="mt-2 p-2 bg-blue-50 rounded border-l-4 border-blue-400">
-                  <div className="text-sm font-medium text-blue-800">📋 Thông tin đặt bàn:</div>
-                  <div className="text-sm text-blue-700">{selectedTable.blockedBy}</div>
-                </div>
-              )}
-              
-              {selectedTable.status === 'occupied' && selectedTable.checkInTime && (
-                <div className="mt-2 p-2 bg-red-50 rounded border-l-4 border-red-400">
-                  <div className="text-sm font-medium text-red-800">👥 Khách đang dùng từ:</div>
-                  <div className="text-sm text-red-700">{selectedTable.checkInTime}</div>
-                </div>
-              )}
-              
-              {selectedTable.status === 'blocked' && selectedTable.blockedBy && (
-                <div className="mt-2 p-2 bg-yellow-50 rounded border-l-4 border-yellow-400">
-                  <div className="text-sm font-medium text-yellow-800">🔒 Lý do khóa:</div>
-                  <div className="text-sm text-yellow-700">{selectedTable.blockedBy}</div>
-                </div>
-              )}
-              
-              {selectedTable.orderId && (
-                <div className="mt-2 p-2 bg-purple-50 rounded border-l-4 border-purple-400">
-                  <div className="text-sm font-medium text-purple-800">🍽️ Order ID:</div>
-                  <div className="text-sm text-purple-700">#{selectedTable.orderId}</div>
-                </div>
-              )}
-            </div>
-            
-            <div className="space-y-3">
-              <h4 className="font-bold">Chuyển trạng thái:</h4>
-              
-              <button
-                onClick={async () => {
-                  try {
-                    // Cancel all active bookings for this table
-                    const activeBookings = orders.filter(order => 
-                      order.status !== 'completed' && 
-                      String(order.tableNumber) === String(selectedTable.tableNumber)
-                    );
-                    
-                    // Cancel each active booking
-                    for (const booking of activeBookings) {
-                      await updateBookingStatus(booking.bookingId || booking.id, 'cancelled', token);
-                    }
-                    
-                    // Then update table status to available
-                    await changeTableStatus(selectedTable.tableNumber, 'available');
-                    
-                    // Refresh orders for this table
-                    await refreshOrdersForTable(selectedTable);
-                    
-                    setShowTableModal(false);
-                  } catch (e) {
-                    alert(e.message || 'Không thể hủy booking và đặt bàn trống');
-                  }
-                }}
-                className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                disabled={selectedTable.status === 'available'}
-              >
-                <Unlock size={20} />
-                Đặt trạng thái TRỐNG
-              </button>
-              
-              <button
-                onClick={async () => {
-                  try {
-                    // Update all pending/confirmed bookings for this table to seated
-                    const activeBookings = orders.filter(order => 
-                      (order.status === 'pending' || order.status === 'preparing') && 
-                      String(order.tableNumber) === String(selectedTable.tableNumber)
-                    );
-                    
-                    // Update each booking to seated
-                    for (const booking of activeBookings) {
-                      await updateBookingStatus(booking.bookingId || booking.id, 'seated', token);
-                    }
-                    
-                    // Then update table status to occupied
-                    await changeTableStatus(selectedTable.tableNumber, 'occupied');
-                    
-                    // Refresh orders for this table
-                    await refreshOrdersForTable(selectedTable);
-                    
-                    setShowTableModal(false);
-                  } catch (e) {
-                    alert(e.message || 'Không thể cập nhật trạng thái khách đang dùng');
-                  }
-                }}
-                className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                disabled={selectedTable.status === 'occupied' || selectedTable.status === 'blocked'}
-              >
-                <Users size={20} />
-                Khách đang dùng
-              </button>
-              
-              <div className="border-t pt-3">
-                <h4 className="font-bold mb-2 text-blue-600">📋 Đặt bàn cho khách</h4>
-                <p className="text-sm text-gray-600 mb-3">Sử dụng khi khách gọi điện hoặc đến trực tiếp đặt bàn</p>
-                <input
-                  type="text"
-                  placeholder="Tên khách hàng"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 mb-2"
-                />
-                <input
-                  type="time"
-                  placeholder="Giờ đặt"
-                  value={reservationTime}
-                  onChange={(e) => setReservationTime(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 mb-2"
-                />
-                <button
-                  onClick={() => {
-                    if (customerName && reservationTime) {
-                      changeTableStatus(selectedTable.tableNumber, 'reserved', `${customerName} - ${reservationTime}`);
-                      setShowTableModal(false);
-                      setCustomerName('');
-                      setReservationTime('');
-                    }
-                  }}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                  disabled={!customerName || !reservationTime || selectedTable.status === 'blocked'}
-                >
-                  <CheckCircle size={20} />
-                  Đặt bàn cho khách
-                </button>
-              </div>
-              
-              <div className="border-t pt-3">
-                <h4 className="font-bold mb-2 text-yellow-600">🔒 Khóa bàn tạm thời</h4>
-                <p className="text-sm text-gray-600 mb-3">Sử dụng khi bàn cần bảo trì hoặc có vấn đề</p>
-                <button
-                  onClick={() => {
-                    changeTableStatus(selectedTable.tableNumber, 'blocked', 'Bảo trì');
-                    setShowTableModal(false);
-                  }}
-                  className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                  disabled={selectedTable.status === 'blocked'}
-                >
-                  <Lock size={20} />
-                  Khóa bàn tạm thời
-                </button>
-              </div>
-              
-              {selectedTable.status === 'blocked' && (
-                <div className="border-t pt-3">
-                  <h4 className="font-bold mb-2 text-red-600">Bàn đã bị khóa</h4>
-                  <button
-                    onClick={async () => {
-                      try {
-                        // Cancel all active bookings for this table
-                        const activeBookings = orders.filter(order => 
-                          order.status !== 'completed' && 
-                          String(order.tableNumber) === String(selectedTable.tableNumber)
-                        );
-                        
-                        // Cancel each active booking
-                        for (const booking of activeBookings) {
-                          await updateBookingStatus(booking.bookingId || booking.id, 'cancelled', token);
-                        }
-                        
-                        // Then update table status to available
-                        await changeTableStatus(selectedTable.tableNumber, 'available');
-                        
-                        // Refresh orders for this table
-                        await refreshOrdersForTable(selectedTable);
-                        
-                        setShowTableModal(false);
-                      } catch (e) {
-                        alert(e.message || 'Không thể mở khóa bàn');
-                      }
-                    }}
-                    className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                  >
-                    <Unlock size={20} />
-                    Mở khóa bàn
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  const handleTableClick = async (table) => {
+    setSelectedTable(table);
+    setShowTableModal(true);
+    setCurrentOrdersTable(table);
+    await refreshOrdersForTable(table);
   };
 
-  const OrderDetailModal = () => {
-    if (!showOrderDetailModal || !selectedOrder) return null;
-    const config = statusConfig[selectedOrder.status];
+  const handlePageChange = (page, order = null) => {
+    setCurrentPage(page);
+    if (order) {
+      setSelectedOrder(order);
+    }
+    if (page === 'notifications') {
+      setPendingCount(0);
+    }
+  };
+
+  const handleTableModalClose = () => {
+    setShowTableModal(false);
+  };
+
+  const handleOrderDetailModalClose = () => {
+    setShowOrderDetailModal(false);
+  };
+
+  const handleGoToInvoice = () => {
+    setCurrentPage('invoice');
+  };
+
+  const handleDateChange = (newDate) => {
+    setSelectedDate(newDate);
+    debouncedRefreshTables({
+      restaurantId: selectedRestaurant?._id || selectedRestaurant?.id,
+      date: newDate,
+    });
+  };
+
+  const handleRefreshTables = () => {
+    refreshTables(selectedRestaurant ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id } : {});
+  };
+
+  const handleRefreshOrders = () => {
+    if (currentOrdersTable) {
+      refreshOrdersForTable(currentOrdersTable);
+    }
+  };
+
+  const handleLoadTableBookingInfo = async (table, date) => {
+    const tableId = table._id || table.id;
+    const res = await getBookingsByTable(tableId, { date }, token);
+    const bookings = Array.isArray(res) ? res : (res?.bookings || []);
     
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-            <h3 className="text-xl font-bold">Chi tiết Order #{selectedOrder.id}</h3>
-            <button onClick={() => setShowOrderDetailModal(false)} className="text-gray-500 hover:text-gray-700">
-              <X size={24} />
-            </button>
-          </div>
-          
-          <div className="p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-600">Khách hàng:</span>
-                <div className="font-medium">{selectedOrder.customerName || 'Khách lẻ'}</div>
-              </div>
-              <div>
-                <span className="text-gray-600">Bàn số:</span>
-                <div className="font-medium">Bàn {selectedOrder.tableNumber}</div>
-              </div>
-              <div>
-                <span className="text-gray-600">Thời gian:</span>
-                <div className="font-medium">{selectedOrder.createdAt}</div>
-              </div>
-              <div>
-                <span className="text-gray-600">Trạng thái:</span>
-                <div className={`inline-block ${config.color} text-white px-3 py-1 rounded-full text-xs font-medium mt-1`}>
-                  {config.label}
-                </div>
-              </div>
-            </div>
-            
-            <div className="border-t pt-4">
-              <h4 className="font-bold mb-3">Danh sách món:</h4>
-              <div className="space-y-2">
-                {selectedOrder.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-start p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <div className="font-medium">{item.name}</div>
-                      {item.note && <div className="text-sm text-gray-500 italic">{item.note}</div>}
-                      <div className="text-sm text-gray-600 mt-1">{item.price.toLocaleString()}đ x {item.quantity}</div>
-                    </div>
-                    <div className="font-bold">{(item.price * item.quantity).toLocaleString()}đ</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            {selectedOrder.note && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <div className="font-medium text-sm mb-1">Ghi chú:</div>
-                <div className="text-sm">{selectedOrder.note}</div>
-              </div>
-            )}
-            
-            <div className="border-t pt-4 flex justify-between items-center">
-              <div className="text-2xl font-bold">Tổng: {selectedOrder.total.toLocaleString()}đ</div>
-              <div className="flex gap-2">
-                {selectedOrder.status === 'pending' && (
-                  <button 
-                    onClick={() => {
-                      updateOrderStatus(selectedOrder.id, 'preparing');
-                      setShowOrderDetailModal(false);
-                    }}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-lg font-medium transition"
-                  >
-                    Xác nhận
-                  </button>
-                )}
-                {selectedOrder.status === 'preparing' && (
-                  <button 
-                    onClick={() => {
-                      updateOrderStatus(selectedOrder.id, 'served');
-                      setShowOrderDetailModal(false);
-                    }}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition"
-                  >
-                    Đã phục vụ
-                  </button>
-                )}
-                {selectedOrder.status === 'served' && (
-                  <button 
-                    onClick={() => {
-                      setShowOrderDetailModal(false);
-                      setCurrentPage('invoice');
-                    }}
-                    className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-medium transition"
-                  >
-                    Thanh toán
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    // Find the most recent active booking (prioritize confirmed bookings)
+    const activeBooking = bookings.find(booking => 
+      booking.status === 'confirmed'
+    ) || bookings.find(booking => 
+      booking.status === 'pending'
     );
+    
+    return activeBooking || null;
+  };
+
+  const handleCreateBookingForTable = async (bookingFormData, table, restaurant) => {
+    const [date, time] = bookingFormData.dateTime.split('T');
+    
+    // Import createReservation and updateBookingStatus functions
+    const { createReservation, updateBookingStatus } = await import('../api/api.js');
+    
+    const bookingData = {
+      restaurantId: restaurant?._id || restaurant?.id,
+      tableId: table._id || table.id,
+      date: date,
+      time: time,
+      adults: parseInt(bookingFormData.adults),
+      children: parseInt(bookingFormData.children) || 0,
+      customerName: `${bookingFormData.firstName} ${bookingFormData.lastName}`,
+      customerPhone: bookingFormData.phone,
+      customerEmail: bookingFormData.email,
+      note: bookingFormData.note,
+    };
+
+    const result = await createReservation(bookingData, token);
+    
+    // Immediately update status to confirmed since staff created it directly
+    if (result && result._id) {
+      await updateBookingStatus(result._id, 'confirmed', token);
+    }
+    
+    if (result && result._id) {
+      // Update table status to reserved
+      await changeTableStatus(table.tableNumber, 'reserved', `${bookingFormData.firstName} ${bookingFormData.lastName} - ${time}`);
+    } else {
+      throw new Error('Đặt bàn thất bại');
+    }
   };
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       <div className="flex-1 overflow-hidden p-4">
         <div className="bg-white rounded-lg shadow-lg h-full p-4 overflow-y-auto">
-      {currentPage === 'orders' && <OrdersPage />}
-      {currentPage === 'tables' && <TablesPage />}
-      {currentPage === 'invoice' && <InvoicePage />}
-      {currentPage === 'notifications' && (
-        <div className="h-full flex flex-col">
-          {/* Header Information */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                  <Building className="w-6 h-6" />
-                  {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
-                </h1>
-                <p className="text-blue-100 text-sm mt-1">
-                  {currentDateTime}
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-sm text-blue-100">Nhân viên</p>
-                  <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
+          {currentPage === 'orders' && (
+            <OrdersPage
+              selectedRestaurant={selectedRestaurant}
+              currentDateTime={currentDateTime}
+              staffInfo={staffInfo}
+              onLogout={handleLogout}
+              errorMessage={errorMessage}
+              filterStatus={filterStatus}
+              onFilterChange={setFilterStatus}
+              loadingOrders={loadingOrders}
+              filteredOrders={filteredOrders}
+              statusConfig={statusConfig}
+              onOrderClick={handleOrderClick}
+              onRefreshOrders={handleRefreshOrders}
+              currentOrdersTable={currentOrdersTable}
+            />
+          )}
+          {currentPage === 'tables' && (
+            <TablesPage
+              selectedRestaurant={selectedRestaurant}
+              currentDateTime={currentDateTime}
+              staffInfo={staffInfo}
+              onLogout={handleLogout}
+              errorMessage={errorMessage}
+              loadingTables={loadingTables}
+              tables={tables}
+              tableStatusConfig={tableStatusConfig}
+              selectedRegion={selectedRegion}
+              selectedDate={selectedDate}
+              onRegionChange={handleRegionChange}
+              onRestaurantChange={handleRestaurantChange}
+              onDateChange={handleDateChange}
+              onTableClick={handleTableClick}
+              onRefreshTables={handleRefreshTables}
+              getUniqueRegions={getUniqueRegions}
+              getRestaurantsByRegion={getRestaurantsByRegion}
+              showWarning={showWarning}
+            />
+          )}
+          {currentPage === 'invoice' && (
+            <InvoicePage
+              selectedRestaurant={selectedRestaurant}
+              currentDateTime={currentDateTime}
+              staffInfo={staffInfo}
+              onLogout={handleLogout}
+              selectedOrder={selectedOrder}
+              orders={orders}
+              onRefreshOrders={handleRefreshOrders}
+              onUpdateOrderStatus={updateOrderStatus}
+            />
+          )}
+          {currentPage === 'notifications' && (
+            <div className="h-full flex flex-col">
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-lg mb-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-bold flex items-center gap-2">
+                      <Building className="w-6 h-6" />
+                      {selectedRestaurant?.name || 'Hệ thống nhà hàng'}
+                    </h1>
+                    <p className="text-blue-100 text-sm mt-1">
+                      {currentDateTime}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-sm text-blue-100">Nhân viên</p>
+                      <p className="font-semibold">{staffInfo?.name || staffInfo?.username || 'Staff'}</p>
+                    </div>
+                    <button 
+                      onClick={handleLogout}
+                      className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Đăng xuất
+                    </button>
+                  </div>
                 </div>
-                <button 
-                  onClick={handleLogout}
-                  className="flex items-center bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Đăng xuất
-                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <NotificationsPage />
               </div>
             </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            <NotificationsPage />
-          </div>
-        </div>
-      )}
+          )}
         </div>
       </div>
 
-      <nav className="bg-white border-t shadow-lg">
-        <div className="flex justify-around">
-          <button
-            onClick={() => setCurrentPage('orders')}
-            className={`flex-1 py-4 flex flex-col items-center gap-1 transition ${
-              currentPage === 'orders' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <ChefHat size={24} />
-            <span className="text-xs font-medium">Orders</span>
-          </button>
-          <button
-            onClick={() => setCurrentPage('tables')}
-            className={`flex-1 py-4 flex flex-col items-center gap-1 transition ${
-              currentPage === 'tables' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <Users size={24} />
-            <span className="text-xs font-medium">Bàn</span>
-          </button>
-          <button
-            onClick={() => {
-              setCurrentPage('notifications');
-              setPendingCount(0);
-            }}
-            className={`relative flex-1 py-4 flex flex-col items-center gap-1 transition ${
-              currentPage === 'notifications' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <div className="relative">
-              <Bell size={24} />
-              {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full px-[5px] py-[1px] font-bold">
-                  {pendingCount}
-                </span>
-              )}
-            </div>
-            <span className="text-xs font-medium">Thông báo</span>
-          </button>
-            
-          <button
-            onClick={() => {
-              setSelectedOrder(orders[0]);
-              setCurrentPage('invoice');
-            }}
-            className={`flex-1 py-4 flex flex-col items-center gap-1 transition ${
-              currentPage === 'invoice' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <CreditCard size={24} />
-            <span className="text-xs font-medium">Hóa đơn</span>
-          </button>
-        </div>
-      </nav>
+      <Navigation
+        currentPage={currentPage}
+        onPageChange={handlePageChange}
+        pendingCount={pendingCount}
+        orders={orders}
+      />
       
-      <TableModal />
-      <OrderDetailModal />
+      <TableModal
+        showTableModal={showTableModal}
+        selectedTable={selectedTable}
+        selectedDate={selectedDate}
+        selectedRestaurant={selectedRestaurant}
+        tableStatusConfig={tableStatusConfig}
+        orders={orders}
+        onClose={handleTableModalClose}
+        onChangeTableStatus={changeTableStatus}
+        onRefreshOrdersForTable={refreshOrdersForTable}
+        onUpdateBookingStatus={updateBookingStatus}
+        onCreateBookingForTable={handleCreateBookingForTable}
+        onLoadTableBookingInfo={handleLoadTableBookingInfo}
+      />
+      
+      <OrderDetailModal
+        showOrderDetailModal={showOrderDetailModal}
+        selectedOrder={selectedOrder}
+        statusConfig={statusConfig}
+        onClose={handleOrderDetailModalClose}
+        onUpdateOrderStatus={updateOrderStatus}
+        onGoToInvoice={handleGoToInvoice}
+      />
     </div>
   );
 };

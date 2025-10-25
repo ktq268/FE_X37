@@ -40,12 +40,10 @@ const Dashboard = () => {
       }
     
       try {
-        console.log("🔍 Đang tải chi nhánh cho miền:", region);
         const data = await getRestaurants({ region });
 
         // Nếu không có dữ liệu mới (304 Not Modified), không cập nhật trạng thái
         if (data === null) {
-          console.log("✅ Không có dữ liệu chi nhánh mới.");
           return;
         }
       
@@ -63,11 +61,9 @@ const Dashboard = () => {
         if (matchedRestaurant) {
           setSelectedRestaurant(savedId);
           setError("");
-          console.log("✅ Khớp lại chi nhánh:", matchedRestaurant.name);
         } else {
           setSelectedRestaurant("");
           setError("⚠️ Vui lòng chọn chi nhánh để xem báo cáo.");
-          console.log("⚠️ Không tìm thấy chi nhánh phù hợp trong miền", region);
         }
       } catch (err) {
         console.error("🚨 Lỗi tải danh sách chi nhánh:", err);

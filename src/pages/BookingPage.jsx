@@ -1,6 +1,7 @@
 // BookingPage.jsx (Đã sửa lỗi gọi API và giữ nguyên UI cũ)
 import React, { useState, useEffect, useMemo } from "react";
 import Header from "../components/Header/Header";
+import { useNotification } from "../hooks/useNotification.js";
 import {
   Calendar,
   MapPin,
@@ -31,6 +32,7 @@ const regionOptions = [
 
 const BookingPage = () => {
   const [step, setStep] = useState(1);
+  const { showSuccess, showError, showWarning, showBooking } = useNotification();
   const [bookingDetails, setBookingDetails] = useState({
     dateTime: "",
     restaurantId: "",
@@ -189,7 +191,10 @@ const BookingPage = () => {
     // Validate thời gian trước khi kiểm tra
     const timeValidation = validateBookingTime(bookingDetails.dateTime);
     if (!timeValidation.isValid) {
-      alert(timeValidation.message);
+      showWarning(
+        "Thời gian không hợp lệ",
+        timeValidation.message
+      );
       return;
     }
 
@@ -199,13 +204,19 @@ const BookingPage = () => {
       bookingDetails.adults < 1 ||
       !bookingDetails.region
     ) {
-      alert("Vui lòng chọn ngày/giờ, số lượng khách (người lớn) và Miền.");
+      showWarning(
+        "Thông tin chưa đầy đủ",
+        "Vui lòng chọn ngày/giờ, số lượng khách (người lớn) và Miền để tiếp tục đặt bàn."
+      );
       return;
     }
 
     const token = localStorage.getItem("token");
     if (!token) {
-      alert("Vui lòng đăng nhập để kiểm tra bàn trống.");
+      showWarning(
+        "Cần đăng nhập",
+        "Vui lòng đăng nhập để kiểm tra bàn trống và đặt bàn."
+      );
       return;
     }
 
@@ -236,11 +247,17 @@ const BookingPage = () => {
         !result.availableRestaurants ||
         result.availableRestaurants.length === 0
       ) {
-        alert("Xin lỗi, không còn bàn trống phù hợp với yêu cầu của bạn.");
+        showWarning(
+          "Không có bàn trống",
+          "Xin lỗi, hiện tại không còn bàn trống phù hợp với yêu cầu của bạn. Vui lòng chọn thời gian khác hoặc liên hệ trực tiếp với nhà hàng."
+        );
       }
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi kiểm tra bàn trống: " + err.message); // Hiển thị lỗi từ API nếu có
+      showError(
+        "Lỗi kiểm tra bàn trống",
+        "Chúng tôi gặp sự cố khi kiểm tra bàn trống. Vui lòng thử lại sau hoặc liên hệ trực tiếp với nhà hàng."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -251,7 +268,10 @@ const BookingPage = () => {
     const tableToReserve = availableTables[0];
     if (!tableToReserve || !tableToReserve.tableId) {
       // Backend trả về tableId
-      alert("Thông tin bàn bị thiếu. Vui lòng thử lại.");
+      showError(
+        "Thông tin bàn không hợp lệ",
+        "Thông tin bàn bị thiếu. Vui lòng thử lại hoặc chọn nhà hàng khác."
+      );
       return;
     }
 
@@ -266,8 +286,9 @@ const BookingPage = () => {
     const token = localStorage.getItem("token");
 
     if (!selectedTableInfo || !bookingDetails.restaurantId || !token) {
-      alert(
-        "Thông tin đặt bàn hoặc đăng nhập bị thiếu. Vui lòng kiểm tra lại."
+      showWarning(
+        "Thông tin không đầy đủ",
+        "Thông tin đặt bàn hoặc đăng nhập bị thiếu. Vui lòng kiểm tra lại và thử lại."
       );
       return;
     }
@@ -292,14 +313,23 @@ const BookingPage = () => {
       );
 
       if (res && res._id) {
-        alert("Đặt bàn thành công! Mã đặt bàn của bạn: " + res._id);
+        showBooking(
+          "Đặt bàn thành công",
+          `Chúc mừng! Bàn đã được đặt thành công. Mã đặt bàn của bạn: ${res._id}. Thông tin xác nhận đã được gửi qua email.`
+        );
         navigate("/booking-success");
       } else {
-        alert("Đặt bàn thất bại: " + (res.message || "Unknown error"));
+        showError(
+          "Đặt bàn thất bại",
+          res.message || "Chúng tôi không thể xử lý yêu cầu đặt bàn lúc này. Vui lòng thử lại sau hoặc liên hệ trực tiếp với nhà hàng."
+        );
       }
     } catch (err) {
       console.error(err);
-      alert("Có lỗi xảy ra khi đặt bàn");
+      showError(
+        "Lỗi hệ thống",
+        "Chúng tôi gặp sự cố kỹ thuật khi xử lý đặt bàn. Vui lòng thử lại sau hoặc liên hệ trực tiếp với nhà hàng."
+      );
     }
   };
 

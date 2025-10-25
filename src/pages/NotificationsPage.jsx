@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getPendingBookings, updateBookingStatus, getTables } from '../api/api.js';
-import { Bell, CheckCircle, XCircle, Calendar, Clock, Users, Phone, Mail, MessageSquare, MapPin, AlertCircle, Building } from 'lucide-react';
+import { getPendingBookings, updateBookingStatus, getTables, getRestaurants } from '../api/api.js';
+import { Bell, CheckCircle, XCircle, Calendar, Clock, Users, Phone, Mail, MessageSquare, MapPin, AlertCircle, Building, Filter } from 'lucide-react';
+import { useNotification } from '../hooks/useNotification.js';
 
 const NotificationsPage = () => {
   const [pendingBookings, setPendingBookings] = useState([]);
@@ -10,20 +11,45 @@ const NotificationsPage = () => {
   const [selectedTableId, setSelectedTableId] = useState('');
   const [showTableModal, setShowTableModal] = useState(false);
   const [currentBooking, setCurrentBooking] = useState(null);
+  
+  // Filter states
+  const [selectedRegion, setSelectedRegion] = useState('all');
+  const [selectedRestaurant, setSelectedRestaurant] = useState('all');
+  const [restaurants, setRestaurants] = useState([]);
+  const [filteredRestaurants, setFilteredRestaurants] = useState([]);
 
   const token = localStorage.getItem('token');
+  const { showSuccess, showError, showBooking, showWarning } = useNotification();
 
   const fetchPendingBookings = async () => {
     setLoading(true);
     setError('');
     try {
-      const bookings = await getPendingBookings(token);
+      const filters = {};
+      if (selectedRegion !== 'all') {
+        filters.region = selectedRegion;
+      }
+      if (selectedRestaurant !== 'all') {
+        filters.restaurantId = selectedRestaurant;
+      }
+      
+      const bookings = await getPendingBookings(token, filters);
       setPendingBookings(Array.isArray(bookings) ? bookings : []);
     } catch (err) {
       console.error('Error fetching pending bookings:', err);
       setError('Không thể tải thông báo đặt bàn. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRestaurants = async () => {
+    try {
+      const restaurantList = await getRestaurants();
+      setRestaurants(Array.isArray(restaurantList) ? restaurantList : []);
+    } catch (err) {
+      console.error('Error fetching restaurants:', err);
+      setError('Không thể tải danh sách nhà hàng. Vui lòng thử lại.');
     }
   };
 
@@ -47,11 +73,50 @@ const NotificationsPage = () => {
   };
 
   useEffect(() => {
+    fetchRestaurants();
     fetchPendingBookings();
     // Tự động cập nhật mỗi 30 giây
     const interval = setInterval(fetchPendingBookings, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Update filtered restaurants when region changes
+  useEffect(() => {
+    if (selectedRegion === 'all') {
+      setFilteredRestaurants(restaurants);
+    } else {
+      setFilteredRestaurants(restaurants.filter(r => r.region === selectedRegion));
+    }
+    // Reset restaurant selection when region changes
+    setSelectedRestaurant('all');
+  }, [selectedRegion, restaurants]);
+
+  // Handle region change with notification
+  const handleRegionChange = (region) => {
+    setSelectedRegion(region);
+    if (region !== 'all' && filteredRestaurants.length === 0) {
+      showWarning(
+        'Vui lòng chọn chi nhánh',
+        'Bạn cần chọn chi nhánh trước khi áp dụng bộ lọc. Vui lòng chọn chi nhánh từ danh sách.'
+      );
+    }
+  };
+
+  // Handle restaurant change with notification
+  const handleRestaurantChange = (restaurantId) => {
+    setSelectedRestaurant(restaurantId);
+    if (restaurantId === 'all' && selectedRegion !== 'all') {
+      showWarning(
+        'Vui lòng chọn chi nhánh cụ thể',
+        'Để xem thông báo theo chi nhánh, bạn cần chọn một chi nhánh cụ thể thay vì "Tất cả chi nhánh".'
+      );
+    }
+  };
+
+  // Fetch bookings when filters change
+  useEffect(() => {
+    fetchPendingBookings();
+  }, [selectedRegion, selectedRestaurant]);
 
   const handleAccept = async (bookingId) => {
     const booking = pendingBookings.find(b => b._id === bookingId);
@@ -84,7 +149,10 @@ const NotificationsPage = () => {
       setCurrentBooking(null);
     } catch (err) {
       console.error('Error accepting booking:', err);
-      alert('Không thể xác nhận đặt bàn. Vui lòng thử lại.');
+      showError(
+        'Xác nhận đặt bàn thất bại',
+        'Chúng tôi không thể xác nhận đặt bàn lúc này. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ.'
+      );
     }
   };
 
@@ -95,7 +163,10 @@ const NotificationsPage = () => {
       setPendingBookings(pendingBookings.filter(booking => booking._id !== bookingId));
     } catch (err) {
       console.error('Error rejecting booking:', err);
-      alert('Không thể từ chối đặt bàn. Vui lòng thử lại.');
+      showError(
+        'Từ chối đặt bàn thất bại',
+        'Chúng tôi không thể từ chối đặt bàn lúc này. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ.'
+      );
     }
   };
 
@@ -138,6 +209,67 @@ const NotificationsPage = () => {
         >
           Làm mới
         </button>
+      </div>
+
+      {/* Filter Section */}
+      <div className="bg-white rounded-lg shadow-md p-4 mb-6 border border-gray-200">
+        <div className="flex items-center mb-4">
+          <Filter className="h-5 w-5 mr-2 text-gray-600" />
+          <h3 className="text-lg font-medium text-gray-900">Bộ lọc thông báo</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Region Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Chọn miền
+            </label>
+            <select
+              value={selectedRegion}
+              onChange={(e) => handleRegionChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">Tất cả miền</option>
+              <option value="north">Miền Bắc</option>
+              <option value="central">Miền Trung</option>
+              <option value="south">Miền Nam</option>
+            </select>
+          </div>
+
+          {/* Restaurant Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Chọn chi nhánh
+            </label>
+            <select
+              value={selectedRestaurant}
+              onChange={(e) => handleRestaurantChange(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={filteredRestaurants.length === 0}
+            >
+              <option value="all">Tất cả chi nhánh</option>
+              {filteredRestaurants.map(restaurant => (
+                <option key={restaurant._id} value={restaurant._id}>
+                  {restaurant.name} - {restaurant.address}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        
+        {/* Filter Summary */}
+        <div className="mt-4 text-sm text-gray-600">
+          {selectedRegion !== 'all' && (
+            <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full mr-2">
+              Miền: {selectedRegion === 'north' ? 'Miền Bắc' : selectedRegion === 'central' ? 'Miền Trung' : 'Miền Nam'}
+            </span>
+          )}
+          {selectedRestaurant !== 'all' && (
+            <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full">
+              Chi nhánh: {filteredRestaurants.find(r => r._id === selectedRestaurant)?.name || 'Đang tải...'}
+            </span>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -228,12 +360,18 @@ const NotificationsPage = () => {
                   )}
 
                   {/* Thông tin chi nhánh */}
-                  {booking.restaurantName && (
-                    <div className="flex items-center text-gray-600">
-                      <Building className="h-4 w-4 mr-2" />
-                      <span className="font-medium">{booking.restaurantName}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center text-gray-600">
+                    <Building className="h-4 w-4 mr-2" />
+                    <span className="font-medium">
+                      {booking.restaurantId?.name || 'Chi nhánh không xác định'}
+                    </span>
+                    {booking.restaurantId?.region && (
+                      <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                        {booking.restaurantId.region === 'north' ? 'Miền Bắc' : 
+                         booking.restaurantId.region === 'central' ? 'Miền Trung' : 'Miền Nam'}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="flex space-x-2 mt-4">
@@ -305,7 +443,7 @@ const NotificationsPage = () => {
                     >
                       <div className="font-bold">Bàn {table.tableNumber}</div>
                       <div className="text-xs">Sức chứa: {table.capacity}</div>
-                      <div className="text-xs">Loại: {table.type}</div>
+                      <div className="text-xs">Loại: {table.type === 'vip' ? 'VIP' : 'Normal'}</div>
                     </button>
                   ))}
                 </div>

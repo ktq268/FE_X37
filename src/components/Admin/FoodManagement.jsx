@@ -173,7 +173,6 @@ const FoodManagement = () => {
             icon={<DeleteOutlined />}
             size="small"
             onClick={() =>{
-              console.log(record._id);
               handleDelete(record._id);
             }}
           >

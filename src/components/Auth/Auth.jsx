@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, User, Lock, Mail, Phone, ChefHat } from 'lucide-react';
 import { registerUser, loginUser } from '../../api/api.js';
+import { useNotification } from '../../hooks/useNotification.js';
 
 const RestaurantAuth = () => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { showSuccess, showError, showPremium } = useNotification();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -55,7 +57,10 @@ const RestaurantAuth = () => {
             role = decodeRoleFromToken(result.token);
           }
           if (role) localStorage.setItem('role', role);
-          alert("Đăng nhập thành công!");
+          showSuccess(
+            "Đăng nhập thành công",
+            "Chào mừng bạn đến với hệ thống quản lý nhà hàng 5 sao!"
+          );
           // Redirect by role
           const effectiveRole = (role || localStorage.getItem('role') || '').toLowerCase();
           if (effectiveRole === 'staff') {
@@ -66,18 +71,26 @@ const RestaurantAuth = () => {
             navigate('/', { replace: true });
           }
           
-          console.log("Login result:", result);
         } else {
-          alert(result.msg || "Đăng nhập thất bại");
+          showError(
+            "Đăng nhập thất bại",
+            result.msg || "Thông tin đăng nhập không chính xác. Vui lòng kiểm tra lại email và mật khẩu."
+          );
         }
       } catch (err) {
         console.error("Login error:", err);
-        alert(err.message || "Có lỗi xảy ra khi đăng nhập");
+        showError(
+          "Lỗi hệ thống",
+          err.message || "Chúng tôi gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
+        );
       }
     } else {
       // Register
       if (formData.password !== formData.confirmPassword) {
-        alert("Mật khẩu xác nhận không khớp");
+        showError(
+          "Mật khẩu không khớp",
+          "Mật khẩu xác nhận không trùng khớp. Vui lòng kiểm tra lại."
+        );
         setIsLoading(false);
         return;
       }
@@ -88,12 +101,13 @@ const RestaurantAuth = () => {
           email: formData.email,
           password: formData.password,
         });
-        console.log("Register API response:", result);
 
         // Kiểm tra đăng ký thành công
         if (result.username || result.email) {
-          alert("Đăng ký thành công!");
-          console.log("Register result:", result);
+          showPremium(
+            "Đăng ký thành công",
+            "Chào mừng bạn gia nhập đội ngũ nhà hàng 5 sao! Tài khoản đã được tạo thành công."
+          );
           // Clear form
           setFormData({
             name: '',
@@ -104,11 +118,17 @@ const RestaurantAuth = () => {
           });
           setIsLogin(true); // Chuyển sang form đăng nhập
         } else {
-          alert(result.msg || "Đăng ký thất bại");
+          showError(
+            "Đăng ký thất bại",
+            result.msg || "Chúng tôi không thể tạo tài khoản lúc này. Vui lòng thử lại sau."
+          );
         }
       } catch (err) {
         console.error("Register error:", err);
-        alert(err.message || "Có lỗi xảy ra khi đăng ký");
+        showError(
+          "Lỗi hệ thống",
+          err.message || "Chúng tôi gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
+        );
       }
     }
     setIsLoading(false);
