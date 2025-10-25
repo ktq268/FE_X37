@@ -18,7 +18,7 @@ const InvoicePage = ({
   const { showSuccess, showError } = useNotification();
   
   const order = selectedOrder || orders[0] || {};
-  const subtotal = order.total;
+  const subtotal = selectedOrder?.total ?? 0;
   const finalTotal = subtotal - discount;
   
   return (

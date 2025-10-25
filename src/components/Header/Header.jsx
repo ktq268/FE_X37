@@ -61,8 +61,8 @@ const Header = () => {
           <a href="/menu" className="hover:underline">
             Menu
           </a>
-          <Link to="/booking">
-            <a className="hover:underline">Đặt bàn</a>
+          <Link to="/booking" className="hover:underline">
+            Đặt bàn
           </Link>
           <a href="/contact" className="hover:underline">
             Liên hệ

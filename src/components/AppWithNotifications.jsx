@@ -12,11 +12,14 @@ import MenuPage from '../pages/MenuPage';
 import StaffOnlyRoute from '../routes/StaffOnlyRoute';
 import AdminOnlyRoute from '../routes/AdminOnlyRoute';
 
+import { CartProvider } from "../contexts/CartContext";
+
 const AppContent = () => {
   const notification = useNotification();
 
   return (
-    <Router>
+    <CartProvider>
+      <Router>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/auth" element={<RestaurantAuth />} />
@@ -48,6 +51,7 @@ const AppContent = () => {
       
       <NotificationProvider notifications={notification.notifications} />
     </Router>
+    </CartProvider>
   );
 };
 

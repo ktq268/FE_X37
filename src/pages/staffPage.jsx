@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings, getRestaurants } from '../api/api.js';
 import { Building, LogOut } from 'lucide-react';
 import NotificationsPage from './NotificationsPage.jsx';
@@ -27,6 +28,7 @@ const staffPage = () => {
   const [orders, setOrders] = useState([]);
   const [ordersList, setOrdersList] = useState([]);
   const [onlineOrders, setOnlineOrders] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
 
   const [tables, setTables] = useState([]);
   const [loadingTables, setLoadingTables] = useState(false);
@@ -50,8 +52,9 @@ const staffPage = () => {
   const [refreshTimeout, setRefreshTimeout] = useState(null);
   const [lastApiCall, setLastApiCall] = useState(0);
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const { showWarning } = useNotification();
+const token =
+  typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   // useNavigate để redirect sau khi thanh toán
   const navigate = useNavigate();
