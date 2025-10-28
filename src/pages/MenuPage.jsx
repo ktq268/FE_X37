@@ -23,7 +23,15 @@ export default function MenuPage() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const { addToCart } = useCart();
-  const { showSuccess } = useToast();
+
+  // Safe useToast: nếu không có ToastProvider, dùng no-op
+  let showSuccess = () => {};
+  try {
+    const toast = useToast();
+    showSuccess = toast?.showSuccess || (() => {});
+  } catch (e) {
+    // no provider present -> ignore
+  }
 
   // Helper: cố gắng lấy URL ảnh từ các field phổ biến
   const getItemImage = (item) => {

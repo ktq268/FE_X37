@@ -9,6 +9,7 @@ import BookingSuccess from '../pages/BookingSuccess';
 import StaffPage from '../pages/staffPage';
 import AdminPage from '../pages/adminPage';
 import MenuPage from '../pages/MenuPage';
+import CartPage from '../pages/CartPage.jsx';
 import StaffOnlyRoute from '../routes/StaffOnlyRoute';
 import AdminOnlyRoute from '../routes/AdminOnlyRoute';
 
@@ -45,7 +46,7 @@ const AppContent = () => {
             </AdminOnlyRoute>
           }
         />
-
+        <Route path="/cart" element={<CartPage />} />
         <Route path="/menu" element={<MenuPage />} />
       </Routes>
       
