@@ -11,6 +11,9 @@ import {
 import { getMenuItems, getMenuItemDetail, getFullMenu } from "../api/api";
 import { useCart } from "../contexts/CartContext";
 import { useToast } from "../contexts/ToastContext";
+import { useNotification } from "../hooks/useNotification.js";
+import { useLoading } from "../hooks/useLoading.js";
+import LoadingSpinner from "../components/LoadingSpinner/LoadingSpinner";
 import Header from "../components/Header/Header";
 import Footer from "../components/Footer/Footer";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -21,17 +24,10 @@ export default function MenuPage() {
   const [items, setItems] = useState([]); // kết quả search
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
   const { addToCart } = useCart();
-
-  // Safe useToast: nếu không có ToastProvider, dùng no-op
-  let showSuccess = () => {};
-  try {
-    const toast = useToast();
-    showSuccess = toast?.showSuccess || (() => {});
-  } catch (e) {
-    // no provider present -> ignore
-  }
+  const { showSuccess } = useToast();
+  const { showError, showSuccess: showNotificationSuccess } = useNotification();
+  const { isLoading, withLoading } = useLoading();
 
   // Helper: cố gắng lấy URL ảnh từ các field phổ biến
   const getItemImage = (item) => {
@@ -58,44 +54,74 @@ export default function MenuPage() {
   // load menu đầy đủ khi vào page (không pagination)
   useEffect(() => {
     async function load() {
-      setIsLoading(true);
       try {
-        const data = await getFullMenu(); // Load tất cả món
+        const data = await withLoading(
+          () => getFullMenu(),
+          "Đang tải thực đơn..."
+        );
         setFullMenu(data);
       } catch (err) {
         console.error("Load full menu failed", err);
-      } finally {
-        setIsLoading(false);
+        showError(
+          "Lỗi tải thực đơn",
+          "Không thể tải thực đơn. Vui lòng thử lại sau."
+        );
       }
     }
     load();
-  }, []);
+  }, [withLoading, showError]);
 
   // tìm kiếm món ăn
   async function handleSearch(e) {
     e.preventDefault();
+    
     if (!searchTerm.trim()) {
       setItems([]); // clear search → hiển thị lại full menu
       return;
     }
-    setIsLoading(true);
+    
     try {
-      const data = await getMenuItems({ q: searchTerm });
-      setItems(data.items);
+      const data = await withLoading(
+        () => getMenuItems({ q: searchTerm }),
+        "Đang tìm kiếm..."
+      );
+      setItems(data.items || []);
     } catch (err) {
       console.error("Search failed", err);
-    } finally {
-      setIsLoading(false);
+      showError(
+        "Lỗi tìm kiếm",
+        "Không thể tìm kiếm món ăn. Vui lòng thử lại sau."
+      );
     }
   }
+
+  // Tìm kiếm real-time khi gõ
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchTerm.trim()) {
+        handleSearch({ preventDefault: () => {} });
+      } else {
+        setItems([]);
+      }
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   // xem chi tiết món ăn
   async function handleViewDetail(id) {
     try {
-      const detail = await getMenuItemDetail(id);
+      const detail = await withLoading(
+        () => getMenuItemDetail(id),
+        "Đang tải chi tiết..."
+      );
       setSelectedItem(detail);
     } catch (err) {
       console.error("Load detail failed", err);
+      showError(
+        "Lỗi tải chi tiết",
+        "Không thể tải chi tiết món ăn. Vui lòng thử lại sau."
+      );
     }
   }
 
@@ -103,10 +129,14 @@ export default function MenuPage() {
   const handleAddToCart = async (item) => {
     try {
       await addToCart(item, 1);
-      showSuccess(`${item.name} đã được thêm vào giỏ hàng!`);
+      showNotificationSuccess(`${item.name} đã được thêm vào giỏ hàng!`);
       setSelectedItem(null);
     } catch (e) {
       console.error("Add to cart failed", e);
+      showError(
+        "Lỗi thêm vào giỏ hàng",
+        "Không thể thêm món ăn vào giỏ hàng. Vui lòng thử lại sau."
+      );
     }
   };
 
@@ -142,7 +172,7 @@ export default function MenuPage() {
                 />
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || !searchTerm.trim()}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-2 rounded-full hover:from-orange-600 hover:to-red-600 transition-all duration-300 disabled:opacity-50"
                 >
                   {isLoading ? "..." : "Tìm"}
@@ -156,9 +186,7 @@ export default function MenuPage() {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-12 mt-20">
         {isLoading ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          </div>
+          <LoadingSpinner size="large" text="Đang tải..." />
         ) : items.length > 0 ? (
           // Search Results
           <div>
@@ -393,3 +421,4 @@ export default function MenuPage() {
     </div>
   );
 }
+

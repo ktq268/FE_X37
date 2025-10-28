@@ -9,7 +9,7 @@ const RestaurantAuth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const { showSuccess, showError, showPremium } = useNotification();
+  const { showSuccess, showError } = useNotification();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -18,6 +18,7 @@ const RestaurantAuth = () => {
     confirmPassword: ''
   });
   const [isLoading, setIsLoading] = useState(false); // Added loading state
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false); // Success message state
 
   const decodeRoleFromToken = (token) => {
     try {
@@ -40,6 +41,31 @@ const RestaurantAuth = () => {
     e.preventDefault();
     setIsLoading(true);
 
+    // Validation phía frontend
+    if (!formData.email.trim()) {
+      showError("Thiếu thông tin", "Vui lòng nhập email.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!formData.password.trim()) {
+      showError("Thiếu thông tin", "Vui lòng nhập mật khẩu.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!isLogin && !formData.name.trim()) {
+      showError("Thiếu thông tin", "Vui lòng nhập họ và tên.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!isLogin && formData.password.length < 6) {
+      showError("Mật khẩu quá ngắn", "Mật khẩu phải có ít nhất 6 ký tự.");
+      setIsLoading(false);
+      return;
+    }
+
     if (isLogin) {
       // Login
       try {
@@ -61,15 +87,21 @@ const RestaurantAuth = () => {
             "Đăng nhập thành công",
             "Chào mừng bạn đến với hệ thống quản lý nhà hàng 5 sao!"
           );
-          // Redirect by role
-          const effectiveRole = (role || localStorage.getItem('role') || '').toLowerCase();
-          if (effectiveRole === 'staff') {
-            navigate('/staff', { replace: true });
-          } else if (effectiveRole === 'admin') {
-            navigate('/admin', { replace: true });
-          } else {
-            navigate('/', { replace: true });
-          }
+          
+          // Hiển thị success message overlay
+          setShowSuccessMessage(true);
+          
+          // Delay redirect để người dùng có thể thấy thông báo
+          setTimeout(() => {
+            const effectiveRole = (role || localStorage.getItem('role') || '').toLowerCase();
+            if (effectiveRole === 'staff') {
+              navigate('/staff', { replace: true });
+            } else if (effectiveRole === 'admin') {
+              navigate('/admin', { replace: true });
+            } else {
+              navigate('/', { replace: true });
+            }
+          }, 3000); // Delay 3 giây
           
         } else {
           showError(
@@ -79,10 +111,29 @@ const RestaurantAuth = () => {
         }
       } catch (err) {
         console.error("Login error:", err);
-        showError(
-          "Lỗi hệ thống",
-          err.message || "Chúng tôi gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
-        );
+        
+        // Xử lý các lỗi cụ thể
+        if (err.message && err.message.includes("Invalid credentials")) {
+          showError(
+            "Thông tin đăng nhập không chính xác",
+            "Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại thông tin đăng nhập."
+          );
+        } else if (err.message && err.message.includes("User not found")) {
+          showError(
+            "Tài khoản không tồn tại",
+            "Không tìm thấy tài khoản với email này. Vui lòng kiểm tra lại email hoặc đăng ký tài khoản mới."
+          );
+        } else if (err.message && err.message.includes("Invalid email")) {
+          showError(
+            "Email không hợp lệ",
+            "Vui lòng nhập địa chỉ email hợp lệ."
+          );
+        } else {
+          showError(
+            "Lỗi hệ thống",
+            err.message || "Chúng tôi gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
+          );
+        }
       }
     } else {
       // Register
@@ -104,19 +155,27 @@ const RestaurantAuth = () => {
 
         // Kiểm tra đăng ký thành công
         if (result.username || result.email) {
-          showPremium(
+          showSuccess(
             "Đăng ký thành công",
             "Chào mừng bạn gia nhập đội ngũ nhà hàng 5 sao! Tài khoản đã được tạo thành công."
           );
-          // Clear form
-          setFormData({
-            name: '',
-            email: '',
-            phone: '',
-            password: '',
-            confirmPassword: '',
-          });
-          setIsLogin(true); // Chuyển sang form đăng nhập
+          
+          // Hiển thị success message overlay
+          setShowSuccessMessage(true);
+          
+          // Delay để người dùng thấy thông báo trước khi chuyển form
+          setTimeout(() => {
+            // Clear form
+            setFormData({
+              name: '',
+              email: '',
+              phone: '',
+              password: '',
+              confirmPassword: '',
+            });
+            setIsLogin(true); // Chuyển sang form đăng nhập
+            setShowSuccessMessage(false); // Ẩn success message
+          }, 3000); // Delay 3 giây
         } else {
           showError(
             "Đăng ký thất bại",
@@ -125,10 +184,40 @@ const RestaurantAuth = () => {
         }
       } catch (err) {
         console.error("Register error:", err);
-        showError(
-          "Lỗi hệ thống",
-          err.message || "Chúng tôi gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
-        );
+        
+        // Xử lý các lỗi cụ thể
+        if (err.message && err.message.includes("User already exists")) {
+          showError(
+            "Email đã được sử dụng",
+            "Email này đã được đăng ký trong hệ thống. Vui lòng sử dụng email khác hoặc đăng nhập nếu bạn đã có tài khoản."
+          );
+          
+          // Tự động chuyển sang form đăng nhập sau 2 giây
+          setTimeout(() => {
+            setIsLogin(true);
+            setFormData(prev => ({
+              ...prev,
+              name: '',
+              phone: '',
+              confirmPassword: ''
+            }));
+          }, 2000);
+        } else if (err.message && err.message.includes("Invalid email")) {
+          showError(
+            "Email không hợp lệ",
+            "Vui lòng nhập địa chỉ email hợp lệ."
+          );
+        } else if (err.message && err.message.includes("Password")) {
+          showError(
+            "Mật khẩu không hợp lệ",
+            "Mật khẩu phải có ít nhất 6 ký tự."
+          );
+        } else {
+          showError(
+            "Lỗi hệ thống",
+            err.message || "Chúng tôi gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
+          );
+        }
       }
     }
     setIsLoading(false);
@@ -321,12 +410,19 @@ const RestaurantAuth = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in ${
+                className={`w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in flex items-center justify-center ${
                   isLoading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
                 style={{ animationDelay: !isLogin ? '0.5s' : '0.3s' }}
               >
-                {isLoading ? 'Đang xử lý...' : isLogin ? 'Đăng nhập' : 'Đăng ký'}
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Đang xử lý...
+                  </>
+                ) : (
+                  isLogin ? 'Đăng nhập' : 'Đăng ký'
+                )}
               </button>
             </form>
 
@@ -352,6 +448,26 @@ const RestaurantAuth = () => {
           </div>
         </div>
       </div>
+
+      {/* Success Message Overlay */}
+      {showSuccessMessage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center shadow-2xl animate-bounce">
+            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">Thành công!</h3>
+            <p className="text-gray-600 mb-4">
+              {isLogin ? 'Đăng nhập thành công! Đang chuyển hướng...' : 'Đăng ký thành công! Chuyển sang đăng nhập...'}
+            </p>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-green-500 h-2 rounded-full animate-pulse" style={{width: '100%'}}></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

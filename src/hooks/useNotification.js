@@ -1,94 +1,77 @@
 import { useState, useCallback } from 'react';
 
-export const useNotification = () => {
+const useNotification = () => {
   const [notifications, setNotifications] = useState([]);
 
-  const showNotification = useCallback((notification) => {
+  const addNotification = useCallback((notification) => {
     const id = Date.now() + Math.random();
     const newNotification = {
       id,
-      ...notification,
-      onClose: () => {
-        setNotifications(prev => prev.filter(n => n.id !== id));
-      }
+      type: 'info',
+      duration: 5000,
+      ...notification
     };
     
     setNotifications(prev => [...prev, newNotification]);
     
+    // Auto remove after duration
+    if (newNotification.duration > 0) {
+      setTimeout(() => {
+        removeNotification(id);
+      }, newNotification.duration);
+    }
+    
     return id;
   }, []);
 
-  const showSuccess = useCallback((title, message, duration = 4000) => {
-    return showNotification({
+  const removeNotification = useCallback((id) => {
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
+  }, []);
+
+  const showSuccess = useCallback((title, message, duration = 5000) => {
+    return addNotification({
       type: 'success',
       title,
       message,
       duration
     });
-  }, [showNotification]);
+  }, [addNotification]);
 
-  const showError = useCallback((title, message, duration = 5000) => {
-    return showNotification({
+  const showError = useCallback((title, message, duration = 7000) => {
+    return addNotification({
       type: 'error',
       title,
       message,
       duration
     });
-  }, [showNotification]);
+  }, [addNotification]);
 
-  const showWarning = useCallback((title, message, duration = 4000) => {
-    return showNotification({
+  const showWarning = useCallback((title, message, duration = 6000) => {
+    return addNotification({
       type: 'warning',
       title,
       message,
       duration
     });
-  }, [showNotification]);
+  }, [addNotification]);
 
-  const showInfo = useCallback((title, message, duration = 4000) => {
-    return showNotification({
+  const showInfo = useCallback((title, message, duration = 5000) => {
+    return addNotification({
       type: 'info',
       title,
       message,
       duration
     });
-  }, [showNotification]);
+  }, [addNotification]);
 
-  const showPremium = useCallback((title, message, duration = 5000) => {
-    return showNotification({
-      type: 'premium',
+  const showBooking = useCallback((title, message, duration = 8000) => {
+    return addNotification({
+      type: 'success',
       title,
       message,
       duration
     });
-  }, [showNotification]);
-
-  const showBooking = useCallback((title, message, duration = 4000) => {
-    return showNotification({
-      type: 'booking',
-      title,
-      message,
-      duration
-    });
-  }, [showNotification]);
-
-  const showTable = useCallback((title, message, duration = 4000) => {
-    return showNotification({
-      type: 'table',
-      title,
-      message,
-      duration
-    });
-  }, [showNotification]);
-
-  const showOrder = useCallback((title, message, duration = 4000) => {
-    return showNotification({
-      type: 'order',
-      title,
-      message,
-      duration
-    });
-  }, [showNotification]);
+  }, [addNotification]);
 
   const clearAll = useCallback(() => {
     setNotifications([]);
@@ -96,15 +79,16 @@ export const useNotification = () => {
 
   return {
     notifications,
-    showNotification,
+    addNotification,
+    removeNotification,
     showSuccess,
     showError,
     showWarning,
     showInfo,
-    showPremium,
     showBooking,
-    showTable,
-    showOrder,
     clearAll
   };
 };
+
+export { useNotification };
+export default useNotification;

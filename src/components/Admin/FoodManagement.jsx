@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { Table, Button, Tag, Modal, message, Space, Switch, Select } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import {
   getMenuItems,
   createMenuItem,
@@ -17,8 +22,8 @@ const FoodManagement = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState("none");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [deleteId, setDeleteId] = useState(null);
-
 
   // 🚀 Lấy danh sách món ăn
   const fetchMenu = async () => {
@@ -41,14 +46,23 @@ const FoodManagement = () => {
     fetchMenu();
   }, []);
 
-  // 🟣 Lọc theo loại
+  // 🟣 Lọc dữ liệu theo loại, trạng thái và sắp xếp
   useEffect(() => {
     let data = [...menu];
 
+    // Lọc theo loại món
     if (categoryFilter !== "all") {
       data = data.filter((item) => item.category === categoryFilter);
     }
 
+    // 🟢 Lọc theo trạng thái
+    if (statusFilter === "available") {
+      data = data.filter((item) => item.isAvailable === true);
+    } else if (statusFilter === "unavailable") {
+      data = data.filter((item) => item.isAvailable === false);
+    }
+
+    // Sắp xếp giá
     if (sortOrder === "asc") {
       data.sort((a, b) => a.price - b.price);
     } else if (sortOrder === "desc") {
@@ -56,7 +70,7 @@ const FoodManagement = () => {
     }
 
     setFilteredMenu(data);
-  }, [categoryFilter, sortOrder, menu]);
+  }, [categoryFilter, sortOrder, statusFilter, menu]);
 
   // 🟢 Toggle trạng thái
   const handleToggleStatus = async (id, currentStatus) => {
@@ -83,7 +97,6 @@ const FoodManagement = () => {
   const handleDelete = (id) => {
     setDeleteId(id);
   };
-  
 
   // 🧾 Lưu dữ liệu sau khi thêm/sửa
   const handleSave = async (values) => {
@@ -110,16 +123,18 @@ const FoodManagement = () => {
       title: "Ảnh",
       dataIndex: "imageUrl",
       key: "imageUrl",
-      render: (url) =>
-        url ? (
+      render: (url) => {
+        const img = Array.isArray(url) ? url[0] : url;
+        return img ? (
           <img
-            src={url}
+            src={img}
             alt="food"
             className="w-16 h-16 object-cover rounded"
           />
         ) : (
           <span className="text-gray-400">Không có ảnh</span>
-        ),
+        );
+      },
     },
     { title: "Tên món", dataIndex: "name", key: "name" },
     {
@@ -172,9 +187,7 @@ const FoodManagement = () => {
             danger
             icon={<DeleteOutlined />}
             size="small"
-            onClick={() =>{
-              handleDelete(record._id);
-            }}
+            onClick={() => handleDelete(record._id)}
           >
             Xóa
           </Button>
@@ -192,15 +205,30 @@ const FoodManagement = () => {
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">🍽️ Quản lý món ăn</h2>
         <Space>
+          {/* Lọc loại món */}
           <Select
             value={categoryFilter}
             onChange={(val) => setCategoryFilter(val)}
             style={{ width: 150 }}
             options={categories.map((c) => ({
-              label: c === "all" ? "Tất cả" : c,
+              label: c === "all" ? "Tất cả loại" : c,
               value: c,
             }))}
           />
+
+          {/* 🟢 Lọc theo trạng thái */}
+          <Select
+            value={statusFilter}
+            onChange={(val) => setStatusFilter(val)}
+            style={{ width: 160 }}
+            options={[
+              { label: "Tất cả trạng thái", value: "all" },
+              { label: "Chỉ còn hàng", value: "available" },
+              { label: "Chỉ hết hàng", value: "unavailable" },
+            ]}
+          />
+
+          {/* Sắp xếp giá */}
           <Select
             value={sortOrder}
             onChange={(val) => setSortOrder(val)}
@@ -211,9 +239,11 @@ const FoodManagement = () => {
               { label: "Giá giảm dần", value: "desc" },
             ]}
           />
+
           <Button icon={<ReloadOutlined />} onClick={fetchMenu}>
             Làm mới
           </Button>
+
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -238,6 +268,7 @@ const FoodManagement = () => {
         className="shadow-md rounded"
       />
 
+      {/* Modal xác nhận xóa */}
       <Modal
         title="Xác nhận xóa món ăn"
         open={!!deleteId}
@@ -258,7 +289,6 @@ const FoodManagement = () => {
         okType="danger"
         cancelText="Hủy"
       />
-      
 
       {/* Modal thêm / sửa */}
       <Modal

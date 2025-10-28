@@ -57,15 +57,32 @@ const TableManagement = () => {
   }, [selectedRestaurant]);
 
   const handleDelete = async (id) => {
-    try {
-      await deleteTable(id, token);
-      message.success("Xóa bàn thành công!");
-      fetchTables();
-    } catch (err) {
-      console.error(err);
-      message.error("Không thể xóa bàn");
-    }
+    Modal.confirm({
+      title: "Xác nhận xóa bàn",
+      content:
+        "Bạn có chắc chắn muốn xóa bàn này không? Hành động này không thể hoàn tác.",
+      okText: "Xóa",
+      cancelText: "Hủy",
+      okType: "danger",
+      async onOk() {
+        try {
+          await deleteTable(id, token);
+          message.success("Xóa bàn thành công!");
+          fetchTables();
+        } catch (err) {
+          const msg = err.response?.data?.message || "Không thể xóa bàn vì bàn đang có booking hoạt động.";
+          Modal.info({
+            title: "Không thể xóa bàn",
+            content: msg,
+            okText: "Đóng",
+          });
+        }
+      },
+    });
   };
+  
+  
+  
 
   const handleEdit = (record) => {
     setEditingTable(record);
