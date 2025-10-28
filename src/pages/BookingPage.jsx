@@ -1,7 +1,9 @@
 // BookingPage.jsx (Đã sửa lỗi gọi API và giữ nguyên UI cũ)
 import React, { useState, useEffect, useMemo } from "react";
 import Header from "../components/Header/Header";
+import LoadingSpinner from "../components/LoadingSpinner/LoadingSpinner";
 import { useNotification } from "../hooks/useNotification.js";
+import { useLoading } from "../hooks/useLoading.js";
 import {
   Calendar,
   MapPin,
@@ -33,6 +35,7 @@ const regionOptions = [
 const BookingPage = () => {
   const [step, setStep] = useState(1);
   const { showSuccess, showError, showWarning, showBooking } = useNotification();
+  const { isLoading, startLoading, stopLoading, withLoading } = useLoading();
   const [bookingDetails, setBookingDetails] = useState({
     dateTime: "",
     restaurantId: "",
@@ -51,7 +54,6 @@ const BookingPage = () => {
 
   const [restaurantOptions, setRestaurantOptions] = useState([]);
   const [availabilityResults, setAvailabilityResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedTableInfo, setSelectedTableInfo] = useState(null);
   const [timeValidation, setTimeValidation] = useState({ isValid: true, message: "" });
 
@@ -100,7 +102,10 @@ const BookingPage = () => {
       }
 
       try {
-        const data = await getRestaurants({ region: bookingDetails.region });
+        const data = await withLoading(
+          () => getRestaurants({ region: bookingDetails.region }),
+          "Đang tải danh sách chi nhánh..."
+        );
         const options = data.map((res) => ({
           value: res._id,
           label: `${res.name} (${res.address || "Chưa có địa chỉ"})`,
@@ -112,10 +117,14 @@ const BookingPage = () => {
         }
       } catch (err) {
         console.error("Lỗi khi lấy danh sách nhà hàng:", err);
+        showError(
+          "Lỗi tải danh sách chi nhánh",
+          "Không thể tải danh sách chi nhánh. Vui lòng thử lại sau."
+        );
       }
     };
     fetchRestaurants();
-  }, [bookingDetails.region]);
+  }, [bookingDetails.region, withLoading, showError]);
 
   // Tên/Địa chỉ chi nhánh đã chọn để hiển thị ở Step 2
   const selectedRestaurantName = useMemo(() => {
@@ -220,13 +229,10 @@ const BookingPage = () => {
       return;
     }
 
-    setIsLoading(true);
-    setAvailabilityResults([]);
-
     try {
       const [date, time] = bookingDetails.dateTime.split("T");
 
-      // **ĐÃ SỬA:** Chuẩn bị data object để gửi qua body (POST)
+      // Chuẩn bị data object để gửi qua body (POST)
       const data = {
         region: bookingDetails.region,
         date: date,
@@ -239,7 +245,10 @@ const BookingPage = () => {
         data.restaurantId = bookingDetails.restaurantId;
       }
 
-      const result = await checkAvailableTables(data, token); // Gọi POST /api/available-tables
+      const result = await withLoading(
+        () => checkAvailableTables(data, token),
+        "Đang kiểm tra bàn trống..."
+      );
 
       setAvailabilityResults(result.availableRestaurants || []);
 
@@ -256,10 +265,8 @@ const BookingPage = () => {
       console.error(err);
       showError(
         "Lỗi kiểm tra bàn trống",
-        "Chúng tôi gặp sự cố khi kiểm tra bàn trống. Vui lòng thử lại sau hoặc liên hệ trực tiếp với nhà hàng."
+        err.message || "Chúng tôi gặp sự cố khi kiểm tra bàn trống. Vui lòng thử lại sau hoặc liên hệ trực tiếp với nhà hàng."
       );
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -280,7 +287,7 @@ const BookingPage = () => {
     setStep(2);
   };
 
-  // --- STEP 2: XỬ LÝ SUBMIT (TẠO BOOKING) (Giữ nguyên) ---
+  // --- STEP 2: XỬ LÝ SUBMIT (TẠO BOOKING) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
@@ -296,20 +303,23 @@ const BookingPage = () => {
     const [date, time] = bookingDetails.dateTime.split("T");
 
     try {
-      const res = await createReservation(
-        {
-          restaurantId: bookingDetails.restaurantId,
-          tableId: selectedTableInfo.tableId, // Gửi tableId đã chọn
-          date: date,
-          time: time,
-          adults: parseInt(bookingDetails.adults),
-          children: parseInt(bookingDetails.children),
-          customerName: `${formData.firstName} ${formData.lastName}`,
-          customerPhone: formData.phone,
-          customerEmail: formData.email,
-          note: formData.note,
-        },
-        token
+      const res = await withLoading(
+        () => createReservation(
+          {
+            restaurantId: bookingDetails.restaurantId,
+            tableId: selectedTableInfo.tableId,
+            date: date,
+            time: time,
+            adults: parseInt(bookingDetails.adults),
+            children: parseInt(bookingDetails.children),
+            customerName: `${formData.firstName} ${formData.lastName}`,
+            customerPhone: formData.phone,
+            customerEmail: formData.email,
+            note: formData.note,
+          },
+          token
+        ),
+        "Đang xử lý đặt bàn..."
       );
 
       if (res && res._id) {
@@ -328,7 +338,7 @@ const BookingPage = () => {
       console.error(err);
       showError(
         "Lỗi hệ thống",
-        "Chúng tôi gặp sự cố kỹ thuật khi xử lý đặt bàn. Vui lòng thử lại sau hoặc liên hệ trực tiếp với nhà hàng."
+        err.message || "Chúng tôi gặp sự cố kỹ thuật khi xử lý đặt bàn. Vui lòng thử lại sau hoặc liên hệ trực tiếp với nhà hàng."
       );
     }
   };
@@ -540,7 +550,7 @@ const BookingPage = () => {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Đang kiểm tra...
+                      Đang kiểm tra bàn trống...
                     </>
                   ) : (
                     "Kiểm tra bàn trống"
@@ -717,10 +727,18 @@ const BookingPage = () => {
 
                 <button
                   type="submit"
-                  className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in"
+                  disabled={isLoading}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   style={{ animationDelay: "0.5s" }}
                 >
-                  Hoàn tất Đặt bàn
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang xử lý đặt bàn...
+                    </>
+                  ) : (
+                    "Hoàn tất Đặt bàn"
+                  )}
                 </button>
               </form>
             )}

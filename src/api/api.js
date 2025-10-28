@@ -1,8 +1,7 @@
-import axios from "axios";
 // api.js (Đã sửa đổi hoàn chỉnh)
 const API_URL = "http://localhost:3000";
 
-// Hàm tiện ích để gọi API (Đã cải thiện error handling)
+// Hàm tiện ích để gọi API với error handling chuẩn hóa
 async function request(endpoint, options = {}, token = null) {
   const headers = {
     "Content-Type": "application/json",
@@ -17,23 +16,55 @@ async function request(endpoint, options = {}, token = null) {
       headers,
     });
 
-
+    // Handle no content response
     if (res.status === 304) {
-      return null; // Indicate no new data, let the caller decide what to do
+      return null;
     }
 
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      console.error("API Error:", error);
-      throw new Error(
-        error.message || `API request failed: ${res.status} ${res.statusText}`
-      );
+    // Handle successful responses
+    if (res.ok) {
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return await res.json();
+      }
+      return await res.text();
     }
 
-    const data = await res.json();
-    return data;
+    // Handle error responses
+    let errorMessage = `Lỗi ${res.status}: ${res.statusText}`;
+    let errorDetails = null;
+
+    try {
+      const errorData = await res.json();
+      errorMessage = errorData.message || errorMessage;
+      errorDetails = errorData;
+    } catch {
+      // If response is not JSON, use status text
+    }
+
+    // Create standardized error object
+    const error = new Error(errorMessage);
+    error.status = res.status;
+    error.statusText = res.statusText;
+    error.details = errorDetails;
+    error.endpoint = endpoint;
+
+    throw error;
   } catch (error) {
-    console.error("API Request Error:", error);
+    // Handle network errors
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      const networkError = new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.');
+      networkError.type = 'NETWORK_ERROR';
+      networkError.endpoint = endpoint;
+      throw networkError;
+    }
+
+    // Re-throw API errors with additional context
+    if (!error.endpoint) {
+      error.endpoint = endpoint;
+    }
+    
+    console.error(`API Request Error [${endpoint}]:`, error);
     throw error;
   }
 }
@@ -193,10 +224,12 @@ export async function updateTable(id, data, token) {
 }
 
 // DELETE /api/tables/:id - Xóa bàn
-export async function deleteTable(id, token) {
+export async function deleteTable(id, token, force = false) {
   if (!id) throw new Error("table id is required");
-  return request(`/api/tables/${id}`, { method: "DELETE" }, token);
+  const query = force ? "?force=true" : "";
+  return request(`/api/tables/${id}${query}`, { method: "DELETE" }, token);
 }
+
 
 
 

@@ -6,6 +6,7 @@ import {
   removeCartItem,
   clearCart,
 } from "../api/api";
+import { useNotification } from "../hooks/useNotification.js";
 
 const CartContext = createContext();
 
@@ -21,6 +22,7 @@ export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const { showError, showSuccess } = useNotification();
 
   // Tính tổng số lượng món trong giỏ hàng
   const calculateTotalItems = (items) => {
@@ -51,6 +53,10 @@ export const CartProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Error loading cart:", error);
+      showError(
+        "Lỗi tải giỏ hàng",
+        "Không thể tải giỏ hàng từ server. Sử dụng giỏ hàng local."
+      );
       // Fallback to localStorage
       const localCart = JSON.parse(localStorage.getItem("cart") || "[]");
       const items = localCart.map((item) => ({
@@ -93,6 +99,10 @@ export const CartProvider = ({ children }) => {
       await loadCart();
     } catch (error) {
       console.error("Error adding to cart:", error);
+      showError(
+        "Lỗi thêm vào giỏ hàng",
+        "Không thể thêm món ăn vào giỏ hàng server. Lưu vào giỏ hàng local."
+      );
       // Fallback to localStorage
       const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
       const existingItemIndex = existingCart.findIndex(
