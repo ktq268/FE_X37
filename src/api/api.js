@@ -273,7 +273,7 @@ export async function updateBookingStatus(
   if (!status) throw new Error("status is required");
   return request(
     `/api/bookings/${bookingId}/status`,
-    { method: "PATCH", body: JSON.stringify({ status, ...additionalData }) },
+    { method: "GET", body: JSON.stringify({ status, ...additionalData }) },
     token
   );
 }
@@ -425,12 +425,36 @@ export const createInvoiceFromOrder = async (orderId, token) => {
 
 // Xuất PDF hóa đơn (/:id/export-pdf)
 export const exportInvoicePdf = async (invoiceId, token) => {
-  return request(
-    `/api/invoices/${invoiceId}/export-pdf`,
-    { method: "GET" },
-    token
-  );
+  const res = await fetch(`/api/invoices/${invoiceId}/export-pdf`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("PDF export error response:", errorText);
+    throw new Error(`Xuất PDF thất bại (${res.status}): ${errorText || res.statusText}`);
+  }
+
+  // Kiểm tra Content-Type để đảm bảo đó là PDF
+  const contentType = res.headers.get("content-type");
+  console.log("📄 Response Content-Type:", contentType);
+
+  // Nếu BE trả về JSON (error case), xử lý đặc biệt
+  if (contentType && contentType.includes("application/json")) {
+    const jsonData = await res.json();
+    throw new Error(jsonData.message || "Lỗi khi xuất PDF");
+  }
+
+  // Trả về Blob
+  const blob = await res.blob();
+  console.log("✅ Blob size:", blob.size, "bytes");
+  
+  return blob;
 };
+
 
 // --- FEEDBACK ---
 // Gửi phản hồi cho 1 order

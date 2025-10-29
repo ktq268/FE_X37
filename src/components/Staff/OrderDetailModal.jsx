@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X } from 'lucide-react';
 
 const OrderDetailModal = ({
@@ -71,28 +71,28 @@ const OrderDetailModal = ({
           <div className="border-t pt-4 flex justify-between items-center">
             <div className="text-2xl font-bold">Tổng: {selectedOrder.total.toLocaleString()}đ</div>
             <div className="flex gap-2">
-              {selectedOrder.status === 'pending' && (
-                <button 
-                  onClick={() => {
-                    onUpdateOrderStatus(selectedOrder.id, 'preparing');
-                    onClose();
-                  }}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-lg font-medium transition"
-                >
-                  Xác nhận
-                </button>
-              )}
-              {selectedOrder.status === 'preparing' && (
-                <button 
-                  onClick={() => {
-                    onUpdateOrderStatus(selectedOrder.id, 'served');
-                    onClose();
-                  }}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition"
-                >
-                  Đã phục vụ
-                </button>
-              )}
+                {selectedOrder.status === 'pending' && (
+                  <AsyncActionButton
+                    label="Xác nhận"
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-lg font-medium transition"
+                    onAction={async () => {
+                      const bookingId = selectedOrder.bookingId || selectedOrder.id || selectedOrder._id;
+                      return await onUpdateOrderStatus(bookingId, 'preparing');
+                    }}
+                    onClose={onClose}
+                  />
+                )}
+                {selectedOrder.status === 'preparing' && (
+                  <AsyncActionButton
+                    label="Đã phục vụ"
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition"
+                    onAction={async () => {
+                      const bookingId = selectedOrder.bookingId || selectedOrder.id || selectedOrder._id;
+                      return await onUpdateOrderStatus(bookingId, 'served');
+                    }}
+                    onClose={onClose}
+                  />
+                )}
               {selectedOrder.status === 'served' && (
                 <button 
                   onClick={() => {
@@ -112,4 +112,31 @@ const OrderDetailModal = ({
   );
 };
 
+
+  // Small helper button component that performs an async action and closes modal on success
+  function AsyncActionButton({ label, className = '', onAction, onClose }) {
+    const [loading, setLoading] = useState(false);
+
+    const handleClick = async () => {
+      if (loading) return;
+      try {
+        setLoading(true);
+        const result = await onAction();
+        // If action returns true-ish, close modal
+        if (result !== false) {
+          if (typeof onClose === 'function') onClose();
+        }
+      } catch (err) {
+        console.error('AsyncActionButton error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <button onClick={handleClick} disabled={loading} className={`${className} ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}>
+        {loading ? 'Đang xử lý...' : label}
+      </button>
+    );
+  }
 export default OrderDetailModal;

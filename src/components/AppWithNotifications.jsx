@@ -9,6 +9,8 @@ import BookingSuccess from '../pages/BookingSuccess';
 import StaffPage from '../pages/staffPage';
 import AdminPage from '../pages/adminPage';
 import MenuPage from '../pages/MenuPage';
+import CartPage from '../pages/CartPage';
+import FeedbackPage from '../pages/FeedbackPage';
 import StaffOnlyRoute from '../routes/StaffOnlyRoute';
 import AdminOnlyRoute from '../routes/AdminOnlyRoute';
 
@@ -38,21 +40,27 @@ const AppContent = () => {
             }
           />
 
-        {/* Admin only */}
-        <Route
-          path="/admin"
-          element={
-            <AdminOnlyRoute>
-              <AdminPage />
-            </AdminOnlyRoute>
-          }
-        />
+          {/* Admin only */}
+          <Route
+            path="/admin"
+            element={
+              <AdminOnlyRoute>
+                <AdminPage />
+              </AdminOnlyRoute>
+            }
+          />
 
-        <Route path="/menu" element={<MenuPage />} />
-      </Routes>
-      
-      <NotificationProvider notifications={notification.notifications} />
-    </Router>
+          <Route path="/menu" element={<MenuPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
+        </Routes>
+        
+        <NotificationProvider 
+          notifications={notification.notifications} 
+          onRemove={notification.removeNotification}
+        />
+      </Router>
+      </ToastProvider>
     </CartProvider>
   );
 };
