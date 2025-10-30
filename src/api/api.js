@@ -69,7 +69,7 @@ async function request(endpoint, options = {}, token = null) {
   }
 }
 
-// --- AUTH (Giữ nguyên) ---
+// --- AUTH ---
 export async function registerUser(data) {
   return request("/api/auth/register", {
     method: "POST",
@@ -88,6 +88,20 @@ export async function loginUser(data) {
 export async function getCurrentUser(token) {
   if (!token) throw new Error("Missing auth token");
   return request("/api/auth/me", { method: "GET" }, token);
+}
+
+export async function forgotPassword(email) {
+  return request("/api/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(token, password) {
+  return request(`/api/auth/reset-password/${token}`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
 }
 
 // --- RESTAURANTS (Lấy danh sách chi nhánh theo vùng) (Giữ nguyên GET) ---

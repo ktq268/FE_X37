@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, User, Lock, Mail, Phone, ChefHat } from 'lucide-react';
+import { Eye, EyeOff, User, Lock, Mail, Phone, ChefHat, ChevronLeft } from 'lucide-react';
 import { registerUser, loginUser } from '../../api/api.js';
 import { useNotification } from '../../hooks/useNotification.js';
+import { useToast } from '../../contexts/ToastContext';
 
 const RestaurantAuth = () => {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ const RestaurantAuth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { showSuccess, showError } = useNotification();
+  const { showSuccess: showToastSuccess, showError: showToastError } = useToast();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -43,25 +45,67 @@ const RestaurantAuth = () => {
 
     // Validation phía frontend
     if (!formData.email.trim()) {
-      showError("Thiếu thông tin", "Vui lòng nhập email.");
+      showError(
+        "Thiếu thông tin email", 
+        isLogin 
+          ? "Vui lòng nhập email để đăng nhập vào hệ thống." 
+          : "Email là bắt buộc để đăng ký tài khoản mới."
+      );
+      showToastError("Vui lòng nhập email");
+      setIsLoading(false);
+      return;
+    }
+
+    // Kiểm tra định dạng email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email.trim())) {
+      showError(
+        "Email không hợp lệ", 
+        "Vui lòng nhập đúng định dạng email (ví dụ: example@domain.com)."
+      );
+      showToastError("Email không đúng định dạng");
       setIsLoading(false);
       return;
     }
 
     if (!formData.password.trim()) {
-      showError("Thiếu thông tin", "Vui lòng nhập mật khẩu.");
+      showError(
+        "Thiếu mật khẩu", 
+        isLogin 
+          ? "Vui lòng nhập mật khẩu để đăng nhập vào tài khoản của bạn." 
+          : "Mật khẩu là bắt buộc để đăng ký tài khoản mới."
+      );
+      showToastError("Vui lòng nhập mật khẩu");
       setIsLoading(false);
       return;
     }
 
     if (!isLogin && !formData.name.trim()) {
-      showError("Thiếu thông tin", "Vui lòng nhập họ và tên.");
+      showError(
+        "Thiếu họ và tên", 
+        "Họ và tên là thông tin bắt buộc để đăng ký tài khoản mới."
+      );
+      showToastError("Vui lòng nhập họ và tên");
       setIsLoading(false);
       return;
     }
 
     if (!isLogin && formData.password.length < 6) {
-      showError("Mật khẩu quá ngắn", "Mật khẩu phải có ít nhất 6 ký tự.");
+      showError(
+        "Mật khẩu quá ngắn", 
+        "Mật khẩu phải có ít nhất 6 ký tự để đảm bảo an toàn cho tài khoản của bạn."
+      );
+      showToastError("Mật khẩu cần ít nhất 6 ký tự");
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!isLogin && formData.confirmPassword.trim() !== formData.password.trim()) {
+      showError(
+        "Mật khẩu không khớp", 
+        "Mật khẩu xác nhận không trùng khớp với mật khẩu đã nhập. Vui lòng kiểm tra lại."
+      );
+      showToastError("Mật khẩu xác nhận không khớp");
       setIsLoading(false);
       return;
     }
@@ -83,10 +127,14 @@ const RestaurantAuth = () => {
             role = decodeRoleFromToken(result.token);
           }
           if (role) localStorage.setItem('role', role);
+          
+          // Thông báo thành công dựa trên vai trò
+          const roleName = role === 'admin' ? 'quản trị viên' : (role === 'staff' ? 'nhân viên' : 'khách hàng');
           showSuccess(
             "Đăng nhập thành công",
-            "Chào mừng bạn đến với hệ thống quản lý nhà hàng 5 sao!"
+            `Chào mừng ${roleName} đến với hệ thống quản lý nhà hàng Maison de Flavors!`
           );
+          showToastSuccess(`Đăng nhập thành công với vai trò ${roleName}!`);
           
           // Hiển thị success message overlay
           setShowSuccessMessage(true);
@@ -106,34 +154,31 @@ const RestaurantAuth = () => {
         } else {
           showError(
             "Đăng nhập thất bại",
-            result.msg || "Thông tin đăng nhập không chính xác. Vui lòng kiểm tra lại email và mật khẩu."
+            result.msg || "Thông tin đăng nhập không chính xác. Vui lòng kiểm tra lại email và mật khẩu của bạn."
           );
+          showToastError("Đăng nhập thất bại - Thông tin không chính xác");
+          // Xóa mật khẩu để người dùng nhập lại
+          setFormData({
+            ...formData,
+            password: ''
+          });
         }
       } catch (err) {
         console.error("Login error:", err);
         
-        // Xử lý các lỗi cụ thể
-        if (err.message && err.message.includes("Invalid credentials")) {
-          showError(
-            "Thông tin đăng nhập không chính xác",
-            "Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại thông tin đăng nhập."
-          );
-        } else if (err.message && err.message.includes("User not found")) {
-          showError(
-            "Tài khoản không tồn tại",
-            "Không tìm thấy tài khoản với email này. Vui lòng kiểm tra lại email hoặc đăng ký tài khoản mới."
-          );
-        } else if (err.message && err.message.includes("Invalid email")) {
-          showError(
-            "Email không hợp lệ",
-            "Vui lòng nhập địa chỉ email hợp lệ."
-          );
-        } else {
-          showError(
-            "Lỗi hệ thống",
-            err.message || "Chúng tôi gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
-          );
-        }
+        // Hiển thị thông báo lỗi đơn giản và rõ ràng
+        showError(
+          "Đăng nhập thất bại",
+          "Tài khoản hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại thông tin đăng nhập."
+        );
+        showToastError("Sai tài khoản hoặc mật khẩu");
+        
+        // Xóa mật khẩu để người dùng nhập lại
+        setFormData({
+          ...formData,
+          password: ''
+        });
+        
       }
     } else {
       // Register
@@ -157,66 +202,100 @@ const RestaurantAuth = () => {
         if (result.username || result.email) {
           showSuccess(
             "Đăng ký thành công",
-            "Chào mừng bạn gia nhập đội ngũ nhà hàng 5 sao! Tài khoản đã được tạo thành công."
+            `Chào mừng ${formData.name} đã gia nhập Maison de Flavors! Tài khoản của bạn đã được tạo thành công.`
           );
-          
+          showToastSuccess("Đăng ký thành công! Chuyển sang đăng nhập sau 2 giây");
+
           // Hiển thị success message overlay
           setShowSuccessMessage(true);
-          
-          // Delay để người dùng thấy thông báo trước khi chuyển form
+
+          // Đợi 2 giây rồi chuyển sang đăng nhập
           setTimeout(() => {
-            // Clear form
+            // Xóa sạch form đăng ký
             setFormData({
-              name: '',
-              email: '',
-              phone: '',
-              password: '',
-              confirmPassword: '',
+              name: "",
+              email: "",
+              phone: "",
+              password: "",
+              confirmPassword: "",
             });
             setIsLogin(true); // Chuyển sang form đăng nhập
-            setShowSuccessMessage(false); // Ẩn success message
-          }, 3000); // Delay 3 giây
+            setShowSuccessMessage(false); // Ẩn overlay
+          }, 2000); // Delay 2 giây
         } else {
+          // Trường hợp backend không trả về trường hợp thành công rõ ràng
           showError(
             "Đăng ký thất bại",
             result.msg || "Chúng tôi không thể tạo tài khoản lúc này. Vui lòng thử lại sau."
           );
+          showToastError("Đăng ký thất bại - Vui lòng thử lại");
+          // Xóa toàn bộ form và giữ nguyên ở màn đăng ký
+          setFormData({
+            name: "",
+            email: "",
+            phone: "",
+            password: "",
+            confirmPassword: "",
+          });
         }
       } catch (err) {
         console.error("Register error:", err);
-        
-        // Xử lý các lỗi cụ thể
+
+        // Lỗi đã tồn tại hoặc các lỗi khác → hiển thị lỗi, xóa form, KHÔNG chuyển sang đăng nhập
         if (err.message && err.message.includes("User already exists")) {
           showError(
             "Email đã được sử dụng",
-            "Email này đã được đăng ký trong hệ thống. Vui lòng sử dụng email khác hoặc đăng nhập nếu bạn đã có tài khoản."
+            `Email "${formData.email}" đã được đăng ký trong hệ thống. Vui lòng sử dụng email khác hoặc đăng nhập nếu đây là tài khoản của bạn.`
           );
-          
-          // Tự động chuyển sang form đăng nhập sau 2 giây
-          setTimeout(() => {
-            setIsLogin(true);
-            setFormData(prev => ({
-              ...prev,
-              name: '',
-              phone: '',
-              confirmPassword: ''
-            }));
-          }, 2000);
+          showToastError("Email đã tồn tại trong hệ thống");
+          // Chỉ xóa email và giữ lại các thông tin khác
+          setFormData({
+            ...formData,
+            email: "",
+            password: "",
+            confirmPassword: "",
+          });
         } else if (err.message && err.message.includes("Invalid email")) {
           showError(
-            "Email không hợp lệ",
-            "Vui lòng nhập địa chỉ email hợp lệ."
+            "Email không hợp lệ", 
+            `"${formData.email}" không phải là địa chỉ email hợp lệ. Vui lòng nhập đúng định dạng email (ví dụ: example@domain.com).`
           );
+          showToastError("Email không đúng định dạng");
+          // Chỉ xóa email
+          setFormData({
+            ...formData,
+            email: "",
+          });
         } else if (err.message && err.message.includes("Password")) {
           showError(
-            "Mật khẩu không hợp lệ",
-            "Mật khẩu phải có ít nhất 6 ký tự."
+            "Mật khẩu không hợp lệ", 
+            "Mật khẩu phải có ít nhất 6 ký tự và không chứa khoảng trắng ở đầu hoặc cuối."
           );
+          showToastError("Mật khẩu không đủ mạnh");
+          // Chỉ xóa mật khẩu
+          setFormData({
+            ...formData,
+            password: "",
+            confirmPassword: "",
+          });
+        } else if (err.message && err.message.includes("Username")) {
+          showError(
+            "Tên người dùng không hợp lệ", 
+            "Tên người dùng phải có ít nhất 3 ký tự và không chứa ký tự đặc biệt."
+          );
+          showToastError("Tên người dùng không hợp lệ");
+          // Chỉ xóa tên
+          setFormData({
+            ...formData,
+            name: "",
+          });
         } else {
           showError(
             "Lỗi hệ thống",
             err.message || "Chúng tôi gặp sự cố kỹ thuật. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ."
           );
+          showToastError("Lỗi hệ thống - Vui lòng thử lại sau");
+          // Giữ nguyên form để người dùng có thể thử lại
         }
       }
     }
@@ -270,6 +349,16 @@ const RestaurantAuth = () => {
           <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 border border-white border-opacity-20">
             {/* Form Toggle */}
             <div className="flex mb-6">
+              {/* Back Button */}
+              <button
+                type="button"
+                onClick={() => isLogin ? navigate('/') : setIsLogin(true)}
+                className="absolute top-0.5 left-0.5 z-20 w-10 h-10 rounded-full bg-white bg-opacity-20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-opacity-30 transition-all duration-300"
+                aria-label="Quay về"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+
               <button
                 onClick={() => setIsLogin(true)}
                 className={`flex-1 py-3 px-4 text-center font-medium rounded-l-lg transition-all duration-300 ${
@@ -400,6 +489,7 @@ const RestaurantAuth = () => {
                   <button
                     type="button"
                     className="text-orange-400 hover:text-orange-300 text-sm transition-colors"
+                    onClick={() => navigate('/forgot-password')}
                   >
                     Quên mật khẩu?
                   </button>
@@ -437,13 +527,6 @@ const RestaurantAuth = () => {
                   {isLogin ? 'Đăng ký ngay' : 'Đăng nhập'}
                 </button>
               </p>
-              {/* Anchor to Homepage */}
-              <a
-                href="/"
-                className="block mt-2 text-xs font-extralight text-orange-400 hover:text-orange-300 transition-colors"
-              >
-                Về lại trang chủ
-              </a>
             </div>
           </div>
         </div>

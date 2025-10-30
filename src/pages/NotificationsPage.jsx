@@ -55,8 +55,16 @@ const NotificationsPage = () => {
 
   const fetchAvailableTables = async (restaurantId, date, time) => {
     try {
+      // Extract restaurant ID if it's an object (populated from backend)
+      const rid = typeof restaurantId === 'string' ? restaurantId : (restaurantId?._id || restaurantId?.id);
+      
+      if (!rid) {
+        console.error('Invalid restaurantId:', restaurantId);
+        return;
+      }
+      
       const tables = await getTables({ 
-        restaurantId, 
+        restaurantId: rid, 
         date, 
         time 
       }, token);

@@ -27,7 +27,10 @@ const BookingBanner = () => {
             Welcome to Maison de Flavors
           </h2>
           <h3 className="text-3xl md:text-xl font-thin font-sans mb-3 text-white animate-fade-in">Vui lòng đặt bàn để có trải nghiệm tốt nhất</h3>
-          <button className="bg-orange-400 text-white px-6 py-3 rounded-lg hover:bg-orange-500 transition-colors duration-300">
+          <button 
+          className="bg-orange-400 text-white px-6 py-3 rounded-lg hover:bg-orange-500 transition-colors duration-300"
+          onClick={() => window.location.href = '/booking'}
+          >
             Đặt bàn
           </button>
         </div>

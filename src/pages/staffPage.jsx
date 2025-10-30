@@ -310,7 +310,6 @@ const loadPendingNotifications = async () => {
         query.status = filterStatus;
       }
       const res = await getOrders(query, token);
-      console.log("🚀 ~ fetchOrders ~ query:", query)
       const list = Array.isArray(res) ? res : res?.orders || [];
       setOrdersList(list);
     } catch (err) {
@@ -498,6 +497,7 @@ const loadPendingNotifications = async () => {
     }
   };
 
+  // changeTableStatus
   const changeTableStatus = async (
     tableNumber,
     newStatus,
@@ -510,15 +510,23 @@ const loadPendingNotifications = async () => {
       const tableId = table._id || table.id;
       if (!tableId) throw new Error(`Không tìm thấy ID của bàn ${tableNumber}`);
   
-      // Cập nhật trạng thái trên server với thông tin ngày được chọn
-      await updateTableStatusById(tableId, newStatus, token, { date: selectedDate });
-
+      // Cập nhật trạng thái trên server với thông tin ngày được chọn + thông tin khách (nếu có)
+    await updateTableStatusById(
+      tableId,
+      newStatus,
+      token,
+      {
+        date: selectedDate,
+        ...(customerInfo && typeof customerInfo === 'object' ? customerInfo : {})
+      }
+    );
+  
       // Gọi lại API để đồng bộ trạng thái bàn mới nhất cho ngày được chọn
       await refreshTables(selectedRestaurant ? { 
         restaurantId: selectedRestaurant._id || selectedRestaurant.id,
         date: selectedDate 
       } : { date: selectedDate });
-
+  
       // Nếu đang xem bàn này thì load lại order
       if (currentOrdersTable && String(currentOrdersTable.tableNumber) === String(tableNumber)) {
         await refreshOrdersForTable(table);
@@ -687,17 +695,28 @@ const loadPendingNotifications = async () => {
 
     const result = await createReservation(bookingData, token);
     
-    // Immediately update status to confirmed since staff created it directly
-    if (result && result._id) {
-      await updateBookingStatus(result._id, 'confirmed', token);
-    }
+    // Ngay sau khi staff tạo, đặt booking thành confirmed
+  if (result && result._id) {
+    await updateBookingStatus(result._id, 'confirmed', token);
+  }
     
     if (result && result._id) {
-      // Update table status to reserved
-      await changeTableStatus(table.tableNumber, 'reserved', `${bookingFormData.firstName} ${bookingFormData.lastName} - ${time}`);
-    } else {
-      throw new Error('Đặt bàn thất bại');
-    }
+    // Truyền đầy đủ info để backend gửi mail đúng khách
+    await changeTableStatus(
+      table.tableNumber,
+      'reserved',
+      {
+        customerName: `${bookingFormData.firstName} ${bookingFormData.lastName}`,
+        customerEmail: bookingFormData.email,
+        customerPhone: bookingFormData.phone,
+        adults: parseInt(bookingFormData.adults),
+        children: parseInt(bookingFormData.children) || 0,
+        time
+      }
+    );
+  } else {
+    throw new Error('Đặt bàn thất bại');
+  }
   };
 
   const BillModal = () => {
@@ -973,7 +992,7 @@ const loadPendingNotifications = async () => {
         onClose={handleTableModalClose}
         onChangeTableStatus={changeTableStatus}
         onRefreshOrdersForTable={refreshOrdersForTable}
-        onUpdateBookingStatus={updateBookingStatus}
+        onUpdateBookingStatus={(id, status, additionalData = {}) => updateBookingStatus(id, status, token, additionalData)}
         onCreateBookingForTable={handleCreateBookingForTable}
         onLoadTableBookingInfo={handleLoadTableBookingInfo}
       />

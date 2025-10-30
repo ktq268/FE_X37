@@ -10,6 +10,8 @@ import StaffPage from '../pages/staffPage';
 import AdminPage from '../pages/adminPage';
 import MenuPage from '../pages/MenuPage';
 import CartPage from '../pages/CartPage';
+import ForgotPassword from '../pages/ForgotPassword';
+import ResetPassword from '../pages/ResetPassword';
 import StaffOnlyRoute from '../routes/StaffOnlyRoute';
 import AdminOnlyRoute from '../routes/AdminOnlyRoute';
 
@@ -26,6 +28,8 @@ const AppContent = () => {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<RestaurantAuth />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
           <Route path="/booking" element={<BookingPage />} />
           <Route path="/booking-success" element={<BookingSuccess />} />
 
