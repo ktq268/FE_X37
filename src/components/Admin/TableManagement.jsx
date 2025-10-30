@@ -32,10 +32,32 @@ const TableManagement = () => {
   };
 
   const fetchTables = async () => {
-    if (!selectedRestaurant) return;
     try {
       setLoading(true);
-      const res = await getTables({ restaurantId: selectedRestaurant }, token);
+
+      const query = {};
+      if (region) {
+        query.region = region;
+      }
+      if (selectedRestaurant) {
+        let rid;
+        if (typeof selectedRestaurant === "string") {
+          rid = selectedRestaurant;
+        } else if (selectedRestaurant && typeof selectedRestaurant === "object") {
+          rid = selectedRestaurant._id || selectedRestaurant.id;
+        }
+
+        if (rid && typeof rid === "string" && rid.trim() !== "") {
+          query.restaurantId = rid;
+        } else {
+          console.error("Invalid restaurantId:", rid);
+          message.error("ID chi nhánh không hợp lệ");
+          setLoading(false);
+          return;
+        }
+      }
+
+      const res = await getTables(query, token);
       setTables(Array.isArray(res) ? res : []);
     } catch (err) {
       console.error(err);
@@ -47,7 +69,8 @@ const TableManagement = () => {
 
   useEffect(() => {
     fetchRestaurants(region);
-    setSelectedRestaurant(null); // Reset selected restaurant when region changes
+    setSelectedRestaurant(null); // Reset chi nhánh khi đổi miền
+    fetchTables(); // Tải bàn theo miền mới, hoặc tất cả nếu miền trống
   }, [region]);
 
   useEffect(() => {
@@ -91,9 +114,7 @@ const TableManagement = () => {
 
   const handleRefresh = () => {
     fetchRestaurants(region);
-    if (selectedRestaurant) {
-      fetchTables();
-    }
+    fetchTables(); // Luôn tải lại bàn theo trạng thái hiện tại
   };
 
   const columns = [

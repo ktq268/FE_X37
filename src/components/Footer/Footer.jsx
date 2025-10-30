@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChefHat, Bell, List, Globe, Facebook, Instagram } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
@@ -7,15 +8,16 @@ const Footer = () => {
       <div className="container mx-auto px-4 md:px-6 grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
         {/* Logo */}
         <div className="flex items-center">
-          <ChefHat className="w-8 h-8 mr-2" />
-          <h1 className="text-xl font-bold">Maison de Flavors</h1>
+          <a
+            href="/"
+            className="flex items-center focus:outline-none focus:ring-2 focus:ring-white rounded cursor-pointer"
+          >
+            <ChefHat className="w-8 h-8 mr-2" />
+            <span className="text-xl font-bold">Maison de Flavors</span>
+          </a>
         </div>
         {/* Notification */}
         <div className="flex flex-col">
-          {/* <p className="text-left">NHÀ HÀNG MAISON DE FLAVOR</p>
-          <p className="text-left">Địa chỉ: Lầu 9, Tòa nhà International Plaza, Số 343 Phạm Ngũ Lão, Quận 1, TP HCM.</p>
-          <p className="text-left">Điện thoại: (028) 38719xx</p>
-          <p className="text-left">Tổng đài: 1900-xxxx</p> */}
           <ul className="space-y-2 ml-4 text-left">
             <li><a href="#" className="hover:text-yellow-200">NHÀ HÀNG MAISON DE FLAVOR</a></li>
             <li><a href="#" className="hover:text-yellow-200">Địa chỉ: Lầu 9, Tòa nhà International Plaza, Số 343 Phạm Ngũ Lão, Quận 1, TP HCM.</a></li>

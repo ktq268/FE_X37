@@ -344,42 +344,86 @@ const TableModal = ({
               
               {/* Nút cho bàn occupied */}
               {selectedTable.status === 'occupied' && (
-                <button
-                  onClick={async () => {
-                    try {
-                      // Update all active bookings for this table to cancelled
-                      const activeBookings = orders.filter(order => 
-                        order.status !== 'completed' && 
-                        String(order.tableNumber) === String(selectedTable.tableNumber)
-                      );
-                      
-                      // Update each booking to cancelled
-                      for (const booking of activeBookings) {
-                        await onUpdateBookingStatus(booking.bookingId || booking.id, 'cancelled');
+                <>
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Tìm các booking đang active cho bàn này
+                        const activeBookings = orders.filter(order => 
+                          order.status === 'served' && 
+                          String(order.tableNumber) === String(selectedTable.tableNumber)
+                        );
+                        
+                        // Cập nhật trạng thái booking thành completed
+                        for (const booking of activeBookings) {
+                          await onUpdateBookingStatus(booking.bookingId || booking.id, 'completed');
+                        }
+                        
+                        // Cập nhật trạng thái bàn thành available (trống)
+                        await onChangeTableStatus(selectedTable.tableNumber, 'available');
+                        
+                        // Refresh orders for this table
+                        await onRefreshOrdersForTable(selectedTable);
+                        
+                        // Reload booking info
+                        await loadTableBookingInfo();
+                        
+                        showSuccess(
+                          'Hoàn tất thành công',
+                          'Đã chuyển trạng thái booking thành hoàn tất và bàn thành trống.'
+                        );
+                        
+                        onClose();
+                      } catch (e) {
+                        showError(
+                          'Hoàn tất thất bại',
+                          e.message || 'Chúng tôi không thể hoàn tất booking và chuyển bàn về trạng thái trống lúc này. Vui lòng thử lại sau.'
+                        );
                       }
-                      
-                      // Then update table status to available
-                      await onChangeTableStatus(selectedTable.tableNumber, 'available');
-                      
-                      // Refresh orders for this table
-                      await onRefreshOrdersForTable(selectedTable);
-                      
-                      // Reload booking info
-                      await loadTableBookingInfo();
-                      
-                      onClose();
-                    } catch (e) {
-                      showError(
-                        'Cập nhật trạng thái bàn thất bại',
-                        e.message || 'Chúng tôi không thể chuyển bàn về trạng thái trống lúc này. Vui lòng thử lại sau.'
-                      );
-                    }
-                  }}
-                  className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                >
-                  <Unlock size={20} />
-                  Chuyển về TRỐNG
-                </button>
+                    }}
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle size={20} />
+                    Hoàn tất
+                  </button>
+                  
+                  <button
+                    onClick={async () => {
+                      try {
+                        // Update all active bookings for this table to cancelled
+                        const activeBookings = orders.filter(order => 
+                          order.status !== 'completed' && 
+                          String(order.tableNumber) === String(selectedTable.tableNumber)
+                        );
+                        
+                        // Update each booking to cancelled
+                        for (const booking of activeBookings) {
+                          await onUpdateBookingStatus(booking.bookingId || booking.id, 'cancelled');
+                        }
+                        
+                        // Then update table status to available
+                        await onChangeTableStatus(selectedTable.tableNumber, 'available');
+                        
+                        // Refresh orders for this table
+                        await onRefreshOrdersForTable(selectedTable);
+                        
+                        // Reload booking info
+                        await loadTableBookingInfo();
+                        
+                        onClose();
+                      } catch (e) {
+                        showError(
+                          'Cập nhật trạng thái bàn thất bại',
+                          e.message || 'Chúng tôi không thể chuyển bàn về trạng thái trống lúc này. Vui lòng thử lại sau.'
+                        );
+                      }
+                    }}
+                    className="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2"
+                  >
+                    <Unlock size={20} />
+                    Chuyển về TRỐNG
+                  </button>
+                </>
               )}
             </div>
           ) : (
