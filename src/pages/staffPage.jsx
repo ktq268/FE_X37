@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings, getRestaurants, getOrders } from '../api/api.js';
+import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, staffUpdateOrderStatus, staffGetOrders, getPendingBookings, getRestaurants, getOrders } from '../api/api.js';
 import { Building, LogOut } from 'lucide-react';
 import NotificationsPage from './NotificationsPage.jsx';
 import { useNotification } from '../hooks/useNotification.js';
+import { useToast } from '../contexts/ToastContext.jsx';
 
 // Import các component mới
 import {
@@ -15,11 +16,11 @@ import {
   Navigation
 } from '../components/Staff';
 
-const staffPage = () => {
+const StaffPage = () => {
   const [currentPage, setCurrentPage] = useState("orders");
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [filterStatus, setFilterStatus] = useState("pending");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [showTableModal, setShowTableModal] = useState(false);
   const [showOrderDetailModal, setShowOrderDetailModal] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -51,9 +52,10 @@ const staffPage = () => {
   const [refreshTimeout, setRefreshTimeout] = useState(null);
   const [lastApiCall, setLastApiCall] = useState(0);
 
-  const { showWarning } = useNotification();
-const token =
-  typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const { showWarning, showError } = useNotification();
+  const { showSuccess } = useToast();
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   // useNavigate để redirect sau khi thanh toán
   const navigate = useNavigate();
@@ -78,17 +80,36 @@ const token =
   };
 
   const feToBeOrderStatus = (status) => {
+    // Map frontend status names to backend allowed status values
     switch (status) {
       case "pending":
-        return "confirmed";
+        return "pending";
       case "preparing":
-        return "seated";
+        // frontend "preparing" corresponds to backend "confirmed"
+        return "confirmed";
       case "served":
-        return "completed";
+        // frontend "served" corresponds to backend "seated"
+        return "seated";
       case "completed":
         return "completed";
       default:
-        return "confirmed";
+        return status;
+    }
+  };
+
+  // Mapping for orders endpoint: backend expects these values for orders
+  const feToOrdersApiStatus = (status) => {
+    switch (status) {
+      case "pending":
+        return "pending";
+      case "preparing":
+        return "preparing";
+      case "served":
+        return "served";
+      case "completed":
+        return "completed";
+      default:
+        return status;
     }
   };
 
@@ -469,31 +490,127 @@ const loadPendingNotifications = async () => {
   };
 
   const updateOrderStatus = async (orderId, newStatus) => {
+    console.log('updateOrderStatus called with:', { orderId, newStatus });
+    
+    if (!orderId) {
+      showError('Lỗi cập nhật', 'Không tìm thấy mã đơn hàng');
+      return;
+    }
+
     try {
-      const order = orders.find((o) => (o.id || o._id) === orderId);
-      if (order) {
-        const beStatus = feToBeOrderStatus(newStatus);
-        await updateBookingStatus(order.bookingId || orderId, beStatus, token);
-        await refreshOrdersForTable(currentOrdersTable);
+      // Tìm order trong tất cả các nguồn dữ liệu có thể
+      let order = orders.find(o => o._id === orderId || o.id === orderId || o.bookingId === orderId);
+      if (!order) {
+        order = ordersList.find(o => o._id === orderId || o.id === orderId || o.bookingId === orderId);
+      }
+      if (!order) {
+        order = onlineOrders.find(o => o._id === orderId || o.id === orderId || o.bookingId === orderId);
+      }
+      
+      console.log('Found order:', order);
+
+      if (!order) {
+        showError('Lỗi cập nhật', 'Không tìm thấy thông tin đơn hàng');
         return;
       }
-      const online = onlineOrders.find((o) => (o.id || o._id) === orderId);
-      if (!order && !online) {
-        // Fallback: update generic staff order by id
-        await staffUpdateOrderStatus(orderId, newStatus, token);
-        await fetchOrders();
-        return;
+
+      // Chuyển đổi trạng thái FE sang BE - chọn mapping theo loại (booking vs order)
+      let beStatus;
+      const isOnlineOrder = order.bookingId === null;
+      if (isOnlineOrder) {
+        beStatus = feToOrdersApiStatus(newStatus);
+      } else {
+        beStatus = feToBeOrderStatus(newStatus);
       }
-      if (online) {
-        await staffUpdateOrderStatus(orderId, newStatus, token);
-        await refreshOnlineOrders();
-        return;
+      console.log('Converting status:', { frontend: newStatus, backend: beStatus, isOnlineOrder });
+
+      // Sử dụng ID phù hợp cho API call
+      const bookingId = order.bookingId || order._id || order.id;
+      console.log('Using bookingId for API:', bookingId);
+
+      // Gọi API cập nhật - nếu là booking (bookingId truthy) gọi bookings endpoint, ngược lại gọi orders endpoint
+      let response = null;
+      const primaryIsOrder = isOnlineOrder; // true -> use orders endpoint first
+
+      // Helper to attempt orders endpoint
+      const tryOrdersEndpoint = async () => {
+        console.log('Calling staffUpdateOrderStatus for order:', bookingId, beStatus);
+        return await staffUpdateOrderStatus(bookingId, feToOrdersApiStatus(newStatus), token);
+      };
+
+      // Helper to attempt bookings endpoint
+      const tryBookingsEndpoint = async () => {
+        console.log('Calling updateBookingStatus for booking:', bookingId, beStatus);
+        return await updateBookingStatus(bookingId, feToBeOrderStatus(newStatus), token, {
+          tableId: order.tableId,
+          tableNumber: order.tableNumber,
+        });
+      };
+
+      // Call the correct endpoint based on order type. Try primary first, fallback once to the other endpoint if primary fails
+      try {
+        if (primaryIsOrder) {
+          response = await tryOrdersEndpoint();
+        } else {
+          response = await tryBookingsEndpoint();
+        }
+      } catch (errPrimary) {
+        console.warn('Primary endpoint failed:', errPrimary);
+        // If primary failed (404/400), try fallback once
+        try {
+          if (primaryIsOrder) {
+            console.log('Fallback: trying bookings endpoint');
+            response = await tryBookingsEndpoint();
+          } else {
+            console.log('Fallback: trying orders endpoint');
+            response = await tryOrdersEndpoint();
+          }
+        } catch (errFallback) {
+          console.error('Fallback also failed:', errFallback);
+          throw errPrimary;
+        }
       }
+
+      console.log('API Response:', response);
+
+      // Cập nhật trạng thái ngay lập tức trong state
+      if (response) {
+        const updatedStatus = beToFeOrderStatus(beStatus);
+        if (orders.length > 0) {
+          setOrders(orders.map(o => 
+            (o._id === orderId || o.id === orderId || o.bookingId === orderId) 
+              ? {...o, status: updatedStatus} 
+              : o
+          ));
+        }
+        setOrdersList(ordersList.map(o => 
+          (o._id === orderId || o.id === orderId || o.bookingId === orderId) 
+            ? {...o, status: updatedStatus} 
+            : o
+        ));
+      }
+
+      // Refresh dữ liệu từ server
+      await Promise.all([
+        fetchOrders(),
+        refreshOrdersForTable(currentOrdersTable),
+        refreshOnlineOrders()
+      ]);
+
+      // Thông báo thành công
+      showSuccess(
+        'Cập nhật thành công', 
+        `Đã cập nhật trạng thái đơn hàng #${orderId} thành ${statusConfig[newStatus].label}`
+      );
+
+      return true;
     } catch (e) {
+      console.error('Error updating order status:', e);
       showError(
         'Cập nhật trạng thái đơn hàng thất bại',
         e.message || 'Chúng tôi không thể cập nhật trạng thái đơn hàng lúc này. Vui lòng thử lại sau.'
       );
+      return false;
     }
   };
 
@@ -1009,4 +1126,4 @@ const loadPendingNotifications = async () => {
   );
 };
 
-export default staffPage;
+export default StaffPage;

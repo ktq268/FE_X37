@@ -12,6 +12,7 @@ import MenuPage from '../pages/MenuPage';
 import CartPage from '../pages/CartPage';
 import ForgotPassword from '../pages/ForgotPassword';
 import ResetPassword from '../pages/ResetPassword';
+import FeedbackPage from '../pages/FeedbackPage';
 import StaffOnlyRoute from '../routes/StaffOnlyRoute';
 import AdminOnlyRoute from '../routes/AdminOnlyRoute';
 
@@ -55,6 +56,7 @@ const AppContent = () => {
 
           <Route path="/menu" element={<MenuPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
         </Routes>
         
         <NotificationProvider 
