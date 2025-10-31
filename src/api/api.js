@@ -432,34 +432,43 @@ export const createInvoiceFromOrder = async (orderId, token) => {
 
 // Xuất PDF hóa đơn (/:id/export-pdf)
 export const exportInvoicePdf = async (invoiceId, token) => {
-  const res = await fetch(`/api/invoices/${invoiceId}/export-pdf`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error("PDF export error response:", errorText);
-    throw new Error(`Xuất PDF thất bại (${res.status}): ${errorText || res.statusText}`);
-  }
-
-  // Kiểm tra Content-Type để đảm bảo đó là PDF
-  const contentType = res.headers.get("content-type");
-  console.log("📄 Response Content-Type:", contentType);
-
-  // Nếu BE trả về JSON (error case), xử lý đặc biệt
-  if (contentType && contentType.includes("application/json")) {
-    const jsonData = await res.json();
-    throw new Error(jsonData.message || "Lỗi khi xuất PDF");
-  }
-
-  // Trả về Blob
-  const blob = await res.blob();
-  console.log("✅ Blob size:", blob.size, "bytes");
+  const url = `${API_URL}/api/invoices/${invoiceId}/export-pdf`;
   
-  return blob;
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "x-auth-token": token,
+      },
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("PDF export error response:", errorText);
+      throw new Error(`Xuất PDF thất bại (${res.status}): ${errorText || res.statusText}`);
+    }
+
+    // Kiểm tra Content-Type để đảm bảo đó là PDF
+    const contentType = res.headers.get("content-type");
+    console.log("📄 Response Content-Type:", contentType);
+
+    // Nếu BE trả về JSON (error case), xử lý đặc biệt
+    if (contentType && contentType.includes("application/json")) {
+      const jsonData = await res.json();
+      throw new Error(jsonData.message || "Lỗi khi xuất PDF");
+    }
+
+    // Trả về Blob với đúng MIME type
+    const blob = await res.blob();
+    console.log("✅ Blob size:", blob.size, "bytes");
+    
+    // Tạo blob với MIME type chính xác
+    const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+    return pdfBlob;
+  } catch (error) {
+    console.error("Export PDF error:", error);
+    throw error;
+  }
 };
 
 

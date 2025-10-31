@@ -10,6 +10,7 @@ const OrderDetailModal = ({
   onGoToInvoice
 }) => {
   if (!showOrderDetailModal || !selectedOrder) return null;
+
   
   const config = statusConfig[selectedOrder.status];
   
@@ -71,28 +72,28 @@ const OrderDetailModal = ({
           <div className="border-t pt-4 flex justify-between items-center">
             <div className="text-2xl font-bold">Tổng: {selectedOrder.total.toLocaleString()}đ</div>
             <div className="flex gap-2">
-                {selectedOrder.status === 'pending' && (
-                  <AsyncActionButton
-                    label="Xác nhận"
-                    className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-lg font-medium transition"
-                    onAction={async () => {
-                      const bookingId = selectedOrder.bookingId || selectedOrder.id || selectedOrder._id;
-                      return await onUpdateOrderStatus(bookingId, 'preparing');
-                    }}
-                    onClose={onClose}
-                  />
-                )}
-                {selectedOrder.status === 'preparing' && (
-                  <AsyncActionButton
-                    label="Đã phục vụ"
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition"
-                    onAction={async () => {
-                      const bookingId = selectedOrder.bookingId || selectedOrder.id || selectedOrder._id;
-                      return await onUpdateOrderStatus(bookingId, 'served');
-                    }}
-                    onClose={onClose}
-                  />
-                )}
+              {selectedOrder.status === 'pending' && (
+                <button 
+                  onClick={() => {
+                    onUpdateOrderStatus(selectedOrder.id || selectedOrder._id, 'preparing');
+                    onClose();
+                  }}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-lg font-medium transition"
+                >
+                  Xác nhận
+                </button>
+              )}
+              {selectedOrder.status === 'preparing' && (
+                <button 
+                  onClick={() => {
+                    onUpdateOrderStatus(selectedOrder.id || selectedOrder._id, 'served');
+                    onClose();
+                  }}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition"
+                >
+                  Đã phục vụ
+                </button>
+              )}
               {selectedOrder.status === 'served' && (
                 <button 
                   onClick={() => {

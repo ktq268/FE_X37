@@ -33,8 +33,13 @@ const InvoicePage = ({
         return;
       }
 
+      if (!orderId) {
+        showError("Lỗi", "Không tìm thấy mã đơn hàng.");
+        return;
+      }
+
       // 1️⃣ Tạo hóa đơn mới (nếu chưa có)
-      console.log("📝 Creating invoice for order:", orderId);
+
       const createdInvoice = await createInvoiceFromOrder(orderId, token);
       const invoiceId = createdInvoice?.invoice?._id || createdInvoice?._id;
 
@@ -43,38 +48,42 @@ const InvoicePage = ({
         return;
       }
 
-      console.log("📄 Invoice created with ID:", invoiceId);
+
 
       // 2️⃣ Xuất PDF (gọi API 1 lần duy nhất)
-      console.log("📥 Fetching PDF export...");
+
       const blob = await exportInvoicePdf(invoiceId, token);
 
       // Debug: Check blob type
-      console.log("✅ Blob received - Type:", blob.type, "Size:", blob.size);
+
 
       if (!blob || blob.size === 0) {
         showError("Lỗi", "File PDF không hợp lệ hoặc rỗng.");
         return;
       }
 
-      // 3️⃣ Tạo URL từ Blob và download
+      // 3️⃣ Tạo URL từ Blob
       const url = window.URL.createObjectURL(blob);
-      console.log("🔗 ObjectURL created:", url);
 
+
+      // 4️⃣ Mở PDF trong tab mới (để xem trước)
+      const previewWindow = window.open(url, '_blank');
+      
+      // 5️⃣ Đồng thời tự động tải xuống
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Invoice_${invoiceId}.pdf`;
+      a.download = `HoaDon_${invoiceId}_${new Date().getTime()}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
 
-      // Cleanup
+      // Cleanup sau 1 phút (để đảm bảo PDF đã load trong tab mới)
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
-        console.log("🧹 ObjectURL revoked");
-      }, 100);
 
-      showSuccess("Thành công", "Hóa đơn đã được tải xuống!");
+      }, 60000);
+
+      showSuccess("Thành công", "Hóa đơn đã được tải xuống và mở trong tab mới!");
     } catch (error) {
       console.error("❌ Error printing invoice:", error);
       showError(
@@ -234,14 +243,28 @@ const InvoicePage = ({
 
             
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => handlePrintInvoice(selectedOrder._id)} className="bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm">
+              <button 
+                onClick={() => {
+                  const orderId = selectedOrder?._id || selectedOrder?.id || order?._id || order?.id;
+                  if (orderId) {
+                    handlePrintInvoice(orderId);
+                  } else {
+                    showError("Lỗi", "Không tìm thấy mã đơn hàng để in hóa đơn.");
+                  }
+                }} 
+                className="bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm"
+              >
                 <Printer size={16} />
                 In bill
               </button>
               <button
                 onClick={async () => {
                   try {
-                    const orderId = selectedOrder?._id || order?._id || order?.id;
+                    const orderId = selectedOrder?._id || selectedOrder?.id || order?._id || order?.id;
+                    if (!orderId) {
+                      showError('Lỗi', 'Không tìm thấy mã đơn hàng.');
+                      return;
+                    }
                     await onUpdateOrderStatus(orderId, 'completed');
                     showSuccess(
                       'Thanh toán thành công',
