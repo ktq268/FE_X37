@@ -31,7 +31,11 @@ const OrderDetailModal = ({
             </div>
             <div>
               <span className="text-gray-600">Bàn số:</span>
-              <div className="font-medium">Bàn {selectedOrder.tableNumber}</div>
+              <div className="font-medium">{selectedOrder.tableNumber || 'N/A'}</div>
+            </div>
+            <div>
+              <span className="text-gray-600">Chi nhánh:</span>
+              <div className="font-medium">{selectedOrder.restaurantName || selectedOrder.restaurant || 'N/A'}</div>
             </div>
             <div>
               <span className="text-gray-600">Thời gian:</span>

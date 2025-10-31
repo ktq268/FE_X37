@@ -425,6 +425,8 @@ const loadPendingNotifications = async () => {
       <div
         onClick={() => {
           setSelectedOrder(order);
+          console.log("Selected order:", order);
+      
           setShowOrderDetailModal(true);
         }}
         className={`border-2 ${config.borderColor} rounded-lg p-3 ${config.bgColor} hover:shadow-lg transition-all cursor-pointer min-w-[280px]`}
