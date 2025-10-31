@@ -304,13 +304,6 @@ export async function getBookingsByRestaurant(restaurantId, query = {}, token) {
 }
 
 
-// ADMIN: Dashboard
-export const getFeedbackStats = async (token) => {
-  return request(`/api/reports/feedback`, 
-    { method: "GET" },
-    token
-  );
-};
 
 // --- ADMIN: REVENUE REPORT (Báo cáo doanh thu) ---
 // Endpoint: GET /api/reports/revenue?restaurantId=...&range=...&from=...&to=...
@@ -471,7 +464,33 @@ export const exportInvoicePdf = async (invoiceId, token) => {
 
 
 // --- FEEDBACK ---
-// Gửi phản hồi cho 1 order
+// Gửi phản hồi theo booking (chuẩn API hiện tại)
+export async function sendFeedback(data, token) {
+  // data: { bookingId, rating, comment, images? }
+  if (!data?.bookingId) throw new Error("bookingId is required");
+  return request(
+    `/api/feedback`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    token
+  );
+}
+
+// Admin: Feedback stats theo chi nhánh
+export const getFeedbackStats = async (restaurantId, token) => {
+  const qs = restaurantId ? `?restaurantId=${restaurantId}` : "";
+  return request(`/api/reports/feedback${qs}`, { method: "GET" }, token);
+};
+
+// Admin: Dashboard metrics (bàn, món, doanh thu orders)
+export async function getDashboardMetrics(restaurantId, token) {
+  if (!restaurantId) throw new Error("restaurantId is required");
+  return request(`/api/reports/metrics?restaurantId=${restaurantId}`, { method: "GET" }, token);
+}
+
+// Gửi phản hồi cho 1 order (DEPRECATED - router CJS không dùng)
 export async function sendOrderFeedback(orderId, data, token) {
   if (!orderId) throw new Error("orderId is required");
   return request(

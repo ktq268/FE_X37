@@ -17,7 +17,12 @@ export default function CartPage() {
 
   const checkout = async () => {
     if (token) {
-      await createOrderFromCart({}, token);
+      const restaurantId = localStorage.getItem("restaurantId");
+      if (!restaurantId) {
+        alert("Vui lòng chọn chi nhánh trước khi thanh toán.");
+        return;
+      }
+      await createOrderFromCart({ restaurantId }, token);
       await clearCartItems();
       alert("Đã tạo đơn hàng từ giỏ!");
     } else {

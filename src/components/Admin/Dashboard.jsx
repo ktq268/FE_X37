@@ -10,6 +10,7 @@ import {
   getRestaurants,
   getRevenueReport,
 } from "../../api/api";
+import { getDashboardMetrics } from "../../api/api";
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -124,7 +125,6 @@ const fetchData = async () => {
     const token = localStorage.getItem("token");
     const restaurantId = selectedRestaurant || localStorage.getItem("restaurantId");
 
-    // 🛑 Nếu chưa chọn chi nhánh → hiển thị cảnh báo, không gọi API
     if (!restaurantId || restaurantId === "none") {
       message.warning("Vui lòng chọn chi nhánh để xem báo cáo doanh thu.");
       setStats({
@@ -138,31 +138,30 @@ const fetchData = async () => {
       return;
     }
 
-    // 🕒 Tạo query thời gian dựa vào timeRange
-    const query = buildTimeQuery(timeRange, customRange);
-    const today = dayjs().format("YYYY-MM-DD");
+    const timeQuery = buildTimeQuery(timeRange, customRange);
 
-    // 🧩 Gọi song song các API cần thiết
-    const [tables, foods, bookings, feedbackStats, revenueReport] = await Promise.all([
-      getTables({ restaurantId }, token),
-      getMenuItems({}, token),
-      getBookingsByRestaurant(restaurantId, { date: today }, token),
-      getFeedbackStats(token),
-      getRevenueReport({ restaurantId, ...query }, token),
-    ]);
+    // Feedback stats theo chi nhánh
+    const feedback = await getFeedbackStats(restaurantId, token);
 
-    // 💰 Doanh thu tổng
-    const revenue = revenueReport?.totalRevenue || 0;
+    // Metrics (bàn, món, doanh thu từ orders hoàn tất)
+    const metrics = await getDashboardMetrics(restaurantId, token);
 
-    // 📊 Cập nhật thống kê
-    setStats({
-      tables: tables?.length || 0,
-      foods: foods?.length || 0,
-      revenue,
-      feedbackTotal: feedbackStats?.totalFeedbacks || 0,
-      avgRating: feedbackStats?.averageRating || 0,
-      ratingCounts: feedbackStats?.ratingCounts || {},
-    });
+    setStats((prev) => ({
+      ...prev,
+      tables: metrics.tables || 0,
+      foods: metrics.foods || 0,
+      revenue: metrics.revenueFromOrders || 0,
+      feedbackTotal: feedback.reduce((acc, s) => acc + (s.count || 0), 0),
+      avgRating: (() => {
+        const total = feedback.reduce((acc, s) => acc + (s.count || 0), 0);
+        const weighted = feedback.reduce((sum, s) => sum + (s._id || 0) * (s.count || 0), 0);
+        return Number(((weighted / (total || 1))).toFixed(2));
+      })(),
+      ratingCounts: feedback.reduce((obj, s) => {
+        obj[s._id] = s.count;
+        return obj;
+      }, {}),
+    }));
   } catch (err) {
     console.error("Dashboard load error:", err);
 

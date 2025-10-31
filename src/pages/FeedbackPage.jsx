@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { sendOrderFeedback } from "../api/api.js";
+import { sendFeedback } from "../api/api.js";
 import { Star, Send, Home, CheckCircle } from "lucide-react";
 import Header from "../components/Header/Header";
 import Footer from "../components/Footer/Footer";
@@ -8,7 +8,7 @@ import { useNotification } from "../hooks/useNotification.js";
 
 export default function FeedbackPage() {
   const [searchParams] = useSearchParams();
-  const orderId = searchParams.get("orderId") || "";
+  const bookingId = searchParams.get("bookingId") || "";
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,22 +19,19 @@ export default function FeedbackPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!orderId) {
-      showError("Lỗi", "Không có mã đơn hàng để gửi phản hồi.");
+    if (!bookingId) {
+      showError("Lỗi", "Không có mã booking để gửi phản hồi.");
       return;
     }
 
     setLoading(true);
     try {
-      await sendOrderFeedback(
-        orderId,
-        { rating: Number(rating), comment },
+      await sendFeedback(
+        { bookingId, rating: Number(rating), comment },
         token
       );
       setSubmitted(true);
       showSuccess("Thành công", "Cảm ơn quý khách! Phản hồi của bạn đã được gửi.");
-      
-      // Tự động quay lại trang chủ sau 3 giây
       setTimeout(() => {
         navigate("/");
       }, 3000);
