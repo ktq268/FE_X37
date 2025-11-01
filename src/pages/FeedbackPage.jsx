@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { sendFeedback } from "../api/api.js";
+import { sendFeedback, getOrderDetail } from "../api/api.js";
 import { Star, Send, Home, CheckCircle } from "lucide-react";
 import Header from "../components/Header/Header";
 import Footer from "../components/Footer/Footer";
@@ -8,26 +8,51 @@ import { useNotification } from "../hooks/useNotification.js";
 
 export default function FeedbackPage() {
   const [searchParams] = useSearchParams();
-  const bookingId = searchParams.get("bookingId") || "";
+  const orderId = searchParams.get("orderId") || "";
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [existingFeedback, setExistingFeedback] = useState(null);
+  const [orderLoading, setOrderLoading] = useState(true);
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
+  // Kiểm tra xem đơn hàng đã có feedback chưa
+  useEffect(() => {
+    const checkOrderFeedback = async () => {
+      if (!orderId || !token) {
+        setOrderLoading(false);
+        return;
+      }
+
+      try {
+        const order = await getOrderDetail(orderId, token);
+        if (order.feedback) {
+          setExistingFeedback(order.feedback);
+        }
+      } catch (err) {
+        console.error("Error checking order feedback:", err);
+      } finally {
+        setOrderLoading(false);
+      }
+    };
+
+    checkOrderFeedback();
+  }, [orderId, token]);
+
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!bookingId) {
-      showError("Lỗi", "Không có mã booking để gửi phản hồi.");
+    if (!orderId) {
+      showError("Lỗi", "Không có mã đơn hàng để gửi phản hồi.");
       return;
     }
 
     setLoading(true);
     try {
       await sendFeedback(
-        { bookingId, rating: Number(rating), comment },
+        { orderId, rating: Number(rating), comment },
         token
       );
       setSubmitted(true);
@@ -37,13 +62,42 @@ export default function FeedbackPage() {
       }, 3000);
     } catch (err) {
       console.error("Feedback error:", err);
-      showError(
-        "Lỗi gửi phản hồi",
-        err.message || "Không thể gửi phản hồi. Vui lòng thử lại."
-      );
+      // Nếu đơn hàng đã được đánh giá, hiển thị feedback hiện có thay vì báo lỗi
+      if (err?.message?.includes("Đơn hàng này đã được đánh giá")) {
+        try {
+          const order = await getOrderDetail(orderId, token);
+          if (order?.feedback) {
+            setExistingFeedback(order.feedback);
+          }
+        } catch (fetchErr) {
+          console.error("Fetch existing feedback error:", fetchErr);
+        }
+        // Không hiện toast lỗi cho trường hợp đã đánh giá
+      } else {
+        showError(
+          "Lỗi gửi phản hồi",
+          err.message || "Không thể gửi phản hồi. Vui lòng thử lại."
+        );
+      }
     } finally {
       setLoading(false);
     }
+  }
+
+  // Hiển thị loading khi đang kiểm tra đơn hàng
+  if (orderLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Đang tải thông tin đơn hàng...</p>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
   }
 
   return (
@@ -81,6 +135,52 @@ export default function FeedbackPage() {
                 Về trang chủ ngay
               </button>
             </div>
+          </div>
+        ) : existingFeedback ? (
+          // Hiển thị feedback đã có
+          <div className="w-full max-w-md text-center">
+            <div className="mb-6 flex justify-center">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-blue-500 rounded-full blur opacity-75 animate-pulse"></div>
+                <div className="relative bg-white rounded-full p-4">
+                  <CheckCircle size={64} className="text-green-500" strokeWidth={1.5} />
+                </div>
+              </div>
+            </div>
+            
+            <h1 className="text-3xl font-bold text-gray-800 mb-3">
+              Đánh giá đã hoàn thành
+            </h1>
+            <p className="text-gray-600 mb-6 text-lg">
+              Bạn đã đánh giá đơn hàng <span className="font-semibold text-orange-600">#{orderId}</span>
+            </p>
+            
+            {/* Hiển thị đánh giá hiện có */}
+            <div className="bg-white rounded-xl p-6 mb-6 shadow-lg">
+              <div className="flex justify-center gap-1 mb-3">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <Star
+                    key={value}
+                    size={24}
+                    className={value <= existingFeedback.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}
+                  />
+                ))}
+              </div>
+              {existingFeedback.comment && (
+                <p className="text-gray-700 italic">"{existingFeedback.comment}"</p>
+              )}
+              <p className="text-sm text-gray-500 mt-2">
+                Đánh giá vào: {new Date(existingFeedback.createdAt).toLocaleDateString('vi-VN')}
+              </p>
+            </div>
+            
+            <button
+              onClick={() => navigate("/")}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+            >
+              <Home size={20} />
+              Về trang chủ
+            </button>
           </div>
         ) : (
           // Feedback Form

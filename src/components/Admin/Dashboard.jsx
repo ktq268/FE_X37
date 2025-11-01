@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Card, Col, Row, Statistic, message, Select, Space, DatePicker, Typography } from "antd";
+import { Card, Col, Row, Statistic, message, Select, Space, DatePicker, Typography, Rate, List, Empty, Spin } from "antd";
 import { Pie } from "@ant-design/plots";
 import dayjs from "dayjs";
 import {
@@ -9,6 +9,8 @@ import {
   getFeedbackStats,
   getRestaurants,
   getRevenueReport,
+  getFeedbacks,
+  staffGetOrders,
 } from "../../api/api";
 import { getDashboardMetrics } from "../../api/api";
 
@@ -30,8 +32,9 @@ const Dashboard = () => {
     avgRating: 0,
     ratingCounts: {},
   });
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
 
-  // ✅ Lấy danh sách chi nhánh theo miền
   useEffect(() => {
     const fetchRestaurants = async () => {
       if (!region) {
@@ -67,7 +70,6 @@ const Dashboard = () => {
           setError("⚠️ Vui lòng chọn chi nhánh để xem báo cáo.");
         }
       } catch (err) {
-        console.error("🚨 Lỗi tải danh sách chi nhánh:", err);
         message.error("Không thể tải danh sách chi nhánh");
         setRestaurants([]);
         setSelectedRestaurant("");
@@ -120,13 +122,79 @@ const Dashboard = () => {
   };
 
   // ✅ Hàm load dữ liệu tổng hợp
-const fetchData = async () => {
-  try {
-    const token = localStorage.getItem("token");
-    const restaurantId = selectedRestaurant || localStorage.getItem("restaurantId");
+  const fetchData = async () => {
+    try {
+      setFeedbackLoading(true);
+      const token = localStorage.getItem("token");
+      const restaurantId = selectedRestaurant || localStorage.getItem("restaurantId");
 
-    if (!restaurantId || restaurantId === "none") {
-      message.warning("Vui lòng chọn chi nhánh để xem báo cáo doanh thu.");
+      if (!restaurantId || restaurantId === "none") {
+        message.warning("Vui lòng chọn chi nhánh để xem báo cáo doanh thu.");
+        setStats({
+          tables: 0,
+          foods: 0,
+          revenue: 0,
+          feedbackTotal: 0,
+          avgRating: 0,
+          ratingCounts: {},
+        });
+        setFeedbacks([]);
+        return;
+      }
+
+      const timeQuery = buildTimeQuery(timeRange, customRange);
+
+      // Gọi song song: thống kê feedback + metrics + orders
+      const [feedbackStatsRes, metricsRes, ordersRes] = await Promise.all([
+        getFeedbackStats(restaurantId, token),
+        getDashboardMetrics(restaurantId, token),
+        staffGetOrders({ restaurantId }, token),
+      ]);
+
+      // Cập nhật stats như hiện tại
+      setStats((prev) => ({
+        ...prev,
+        tables: metricsRes.tables || 0,
+        foods: metricsRes.foods || 0,
+        revenue: metricsRes.revenueFromOrders || 0,
+        feedbackTotal: feedbackStatsRes.reduce((acc, s) => acc + (s.count || 0), 0),
+        avgRating: (() => {
+          const total = feedbackStatsRes.reduce((acc, s) => acc + (s.count || 0), 0);
+          const weighted = feedbackStatsRes.reduce((sum, s) => sum + (s._id || 0) * (s.count || 0), 0);
+          return Number(((weighted / (total || 1))).toFixed(2));
+        })(),
+        ratingCounts: feedbackStatsRes.reduce((obj, s) => {
+          obj[s._id] = s.count;
+          return obj;
+        }, {}),
+      }));
+
+      // Trích xuất feedback từ orders (order.feedback)
+      const rawOrders = Array.isArray(ordersRes) ? ordersRes : (ordersRes?.data || []);
+      const feedbacksFromOrders = rawOrders
+        .filter((o) => o?.feedback && typeof o.feedback.rating === "number")
+        .map((o) => ({
+          rating: o.feedback.rating,
+          comment: o.feedback.comment,
+          createdAt: o.feedback.updatedAt || o.feedback.createdAt || o.updatedAt || o.createdAt,
+          user: o.user,
+          restaurant: o.restaurant,
+          orderId: o._id,
+        }))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      setFeedbacks(feedbacksFromOrders);
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+
+      // 💬 Xử lý lỗi BE trả về (ví dụ 400 khi chưa chọn chi nhánh)
+      if (err.response?.status === 400 && err.response?.data?.message) {
+        message.warning(err.response.data.message);
+      } else {
+        message.error("Không thể tải dữ liệu dashboard. Vui lòng thử lại sau.");
+      }
+
+      // Reset lại stats và feedbacks để UI không hiển thị dữ liệu cũ
       setStats({
         tables: 0,
         foods: 0,
@@ -135,54 +203,11 @@ const fetchData = async () => {
         avgRating: 0,
         ratingCounts: {},
       });
-      return;
+      setFeedbacks([]);
+    } finally {
+      setFeedbackLoading(false);
     }
-
-    const timeQuery = buildTimeQuery(timeRange, customRange);
-
-    // Feedback stats theo chi nhánh
-    const feedback = await getFeedbackStats(restaurantId, token);
-
-    // Metrics (bàn, món, doanh thu từ orders hoàn tất)
-    const metrics = await getDashboardMetrics(restaurantId, token);
-
-    setStats((prev) => ({
-      ...prev,
-      tables: metrics.tables || 0,
-      foods: metrics.foods || 0,
-      revenue: metrics.revenueFromOrders || 0,
-      feedbackTotal: feedback.reduce((acc, s) => acc + (s.count || 0), 0),
-      avgRating: (() => {
-        const total = feedback.reduce((acc, s) => acc + (s.count || 0), 0);
-        const weighted = feedback.reduce((sum, s) => sum + (s._id || 0) * (s.count || 0), 0);
-        return Number(((weighted / (total || 1))).toFixed(2));
-      })(),
-      ratingCounts: feedback.reduce((obj, s) => {
-        obj[s._id] = s.count;
-        return obj;
-      }, {}),
-    }));
-  } catch (err) {
-    console.error("Dashboard load error:", err);
-
-    // 💬 Xử lý lỗi BE trả về (ví dụ 400 khi chưa chọn chi nhánh)
-    if (err.response?.status === 400 && err.response?.data?.message) {
-      message.warning(err.response.data.message);
-    } else {
-      message.error("Không thể tải dữ liệu dashboard. Vui lòng thử lại sau.");
-    }
-
-    // Reset lại stats để UI không hiển thị dữ liệu cũ
-    setStats({
-      tables: 0,
-      foods: 0,
-      revenue: 0,
-      feedbackTotal: 0,
-      avgRating: 0,
-      ratingCounts: {},
-    });
-  }
-};
+  };
 
 
   // ✅ Chuẩn bị dữ liệu cho biểu đồ tròn
@@ -315,13 +340,63 @@ const fetchData = async () => {
       {/* 🔹 Biểu đồ và feedback */}
       <Row gutter={16} className="mt-8">
         <Col span={12}>
-          <Card title="📊 Phân bố đánh giá sao" className="shadow">
+          <Card title="📊 Phân bối đánh giá sao" className="shadow">
             {ratingData.length > 0 ? <Pie {...pieConfig} /> : <p>Chưa có dữ liệu đánh giá.</p>}
           </Card>
         </Col>
         <Col span={12}>
           <Card className="shadow" title="💬 Tổng số Feedback">
             <Statistic value={stats.feedbackTotal} />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 🔹 Danh sách feedback mới nhất (order.feedback) */}
+      <Row gutter={16} style={{ marginTop: 16 }}>
+        <Col xs={24}>
+          <Card title="💬 Phản hồi mới nhất">
+            {feedbackLoading ? (
+              <Spin />
+            ) : feedbacks.length === 0 ? (
+              <Empty description="Chưa có phản hồi" />
+            ) : (
+              <List
+                dataSource={feedbacks.slice(0, 10)}
+                renderItem={(item) => {
+                  const created = item.createdAt
+                    ? new Date(item.createdAt).toLocaleString("vi-VN")
+                    : "";
+                  // Thêm fallback an toàn hơn
+                  const userName =
+                    item.user?.name ||
+                    item.user?.fullName ||
+                    (item.user ? `User ID: ${item.user}`: 'Người dùng ẩn danh');
+                  const restaurantName =
+                    item.restaurant?.name || item.restaurantName || "";
+                  return (
+                    <List.Item>
+                      <List.Item.Meta
+                        title={
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <span>{userName}</span>
+                            {restaurantName ? (
+                              <span style={{ color: "#888" }}>· {restaurantName}</span>
+                            ) : null}
+                            <span style={{ color: "#888" }}>· {created}</span>
+                          </div>
+                        }
+                        description={
+                          <div>
+                            <Rate disabled value={item.rating} />
+                            <div style={{ marginTop: 4 }}>{item.comment}</div>
+                          </div>
+                        }
+                      />
+                    </List.Item>
+                  );
+                }}
+              />
+            )}
           </Card>
         </Col>
       </Row>

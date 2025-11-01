@@ -70,7 +70,6 @@ const MenuForm = ({ initialValues, onSuccess }) => {
       setImageList([]);
       if (onSuccess) onSuccess();
     } catch (err) {
-      console.error("Error:", err);
       message.error("Không thể lưu món ăn!");
     }
   };

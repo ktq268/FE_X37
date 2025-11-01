@@ -85,7 +85,6 @@ const InvoicePage = ({
 
       showSuccess("Thành công", "Hóa đơn đã được tải xuống và mở trong tab mới!");
     } catch (error) {
-      console.error("❌ Error printing invoice:", error);
       showError(
         "Lỗi in hóa đơn",
         error.message || "Không thể in hóa đơn. Vui lòng thử lại!"

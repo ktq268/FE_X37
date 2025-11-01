@@ -26,7 +26,6 @@ const TableManagement = () => {
         setRestaurants([]);
       }
     } catch (err) {
-      console.error(err);
       message.error("Không thể tải danh sách chi nhánh");
     }
   };
@@ -50,7 +49,6 @@ const TableManagement = () => {
         if (rid && typeof rid === "string" && rid.trim() !== "") {
           query.restaurantId = rid;
         } else {
-          console.error("Invalid restaurantId:", rid);
           message.error("ID chi nhánh không hợp lệ");
           setLoading(false);
           return;
@@ -60,7 +58,6 @@ const TableManagement = () => {
       const res = await getTables(query, token);
       setTables(Array.isArray(res) ? res : []);
     } catch (err) {
-      console.error(err);
       message.error("Không thể tải danh sách bàn");
     } finally {
       setLoading(false);

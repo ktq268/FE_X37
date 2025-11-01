@@ -10,7 +10,6 @@ const MenuList = () => {
       const res = await getMenuItems();
       setMenu(res.data);
     } catch (err) {
-      console.error(err);
       message.error("Không thể tải danh sách món ăn");
     }
   };
@@ -25,7 +24,6 @@ const MenuList = () => {
       message.success("Xóa món thành công!");
       fetchMenu();
     } catch (err) {
-      console.error(err);
       message.error("Không thể xóa món ăn");
     }
   };

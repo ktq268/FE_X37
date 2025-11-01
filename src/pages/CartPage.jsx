@@ -78,6 +78,7 @@ export default function CartPage() {
     tableNumber: "",
     region: "south",
     restaurantId: "",
+    restaurantName: "",
   });
   const [restaurantOptions, setRestaurantOptions] = useState([]);
 
@@ -104,7 +105,6 @@ export default function CartPage() {
           setOrderFormData((prev) => ({ ...prev, restaurantId: "" }));
         }
       } catch (err) {
-        console.error("Lỗi khi lấy danh sách nhà hàng:", err);
         showError(
           "Lỗi tải danh sách chi nhánh",
           "Không thể tải danh sách chi nhánh. Vui lòng thử lại sau."
@@ -134,15 +134,15 @@ export default function CartPage() {
     }
 
     try {
-      await createOrderFromCart(
-        {
+      const orderData = {
           customerName: orderFormData.customerName,
           tableNumber: orderFormData.tableNumber,
           restaurantId: orderFormData.restaurantId,
+          restaurantName: orderFormData.restaurantName,
           region: orderFormData.region,
-        },
-        token
-      );
+      };
+      console.log("Sending order data:", orderData);
+      await createOrderFromCart(orderData, token);
       await clearCartItems();
       showSuccess("Thành công", "Đơn hàng đã được tạo thành công!");
       setShowOrderModal(false);
@@ -360,7 +360,11 @@ export default function CartPage() {
                     (opt) => opt.value === orderFormData.restaurantId
                   )}
                   onChange={(opt) =>
-                    setOrderFormData({ ...orderFormData, restaurantId: opt?.value })
+                    setOrderFormData({ 
+                      ...orderFormData, 
+                      restaurantId: opt?.value,
+                      restaurantName: opt?.label
+                    })
                   }
                   styles={customSelectStyles}
                   placeholder="Chọn chi nhánh..."

@@ -164,7 +164,6 @@ const RestaurantAuth = () => {
           });
         }
       } catch (err) {
-        console.error("Login error:", err);
         
         // Hiển thị thông báo lỗi đơn giản và rõ ràng
         showError(
@@ -239,7 +238,6 @@ const RestaurantAuth = () => {
           });
         }
       } catch (err) {
-        console.error("Register error:", err);
 
         // Lỗi đã tồn tại hoặc các lỗi khác → hiển thị lỗi, xóa form, KHÔNG chuyển sang đăng nhập
         if (err.message && err.message.includes("User already exists")) {

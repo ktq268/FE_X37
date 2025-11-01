@@ -35,7 +35,6 @@ const FoodManagement = () => {
       setMenu(items);
       setFilteredMenu(items);
     } catch (err) {
-      console.error(err);
       message.error("Không thể tải danh sách món ăn");
     } finally {
       setLoading(false);
@@ -88,7 +87,6 @@ const FoodManagement = () => {
         )
       );
     } catch (err) {
-      console.error(err);
       message.error("Không thể đổi trạng thái món ăn");
     }
   };
@@ -112,7 +110,6 @@ const FoodManagement = () => {
       setIsModalOpen(false);
       fetchMenu();
     } catch (err) {
-      console.error(err);
       message.error("Không thể lưu món ăn");
     }
   };
@@ -281,7 +278,6 @@ const FoodManagement = () => {
             setMenu((prev) => prev.filter((item) => item._id !== deleteId));
             setDeleteId(null);
           } catch (err) {
-            console.error("❌ Delete failed:", err);
             message.error("Không thể xóa món ăn");
           }
         }}

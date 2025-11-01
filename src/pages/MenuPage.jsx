@@ -111,8 +111,7 @@ export default function MenuPage() {
       
       if (searchResults.length === 0) {
         showError(
-          "Không tìm thấy",
-          `Không tìm thấy món ăn nào phù hợp với từ khóa "${searchTerm}"`
+          `Không tìm thấy món “${searchTerm}”`
         );
       }
     } catch (err) {
@@ -216,6 +215,27 @@ export default function MenuPage() {
       <div className="container mx-auto px-4 py-12 mt-20">
         {isLoading ? (
           <LoadingSpinner size="large" text="Đang tải..." />
+        ) : searchTerm.trim() && items.length === 0 ? (
+          <div>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-bold text-gray-800">
+                Kết quả tìm kiếm cho "{searchTerm}"
+              </h2>
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setItems([]);
+                }}
+                className="flex items-center gap-2 text-orange-500 hover:text-orange-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Xóa tìm kiếm
+              </button>
+            </div>
+            <div className="text-center text-gray-600">
+              Không tìm thấy món cho “{searchTerm}”.
+            </div>
+          </div>
         ) : items.length > 0 ? (
           // Search Results
           <div>
