@@ -67,7 +67,7 @@ export default function FeedbackPage() {
               Cảm ơn bạn!
             </h1>
             <p className="text-gray-600 mb-8 text-lg">
-              Phản hồi của quý khách về đơn hàng <span className="font-semibold text-orange-600">#{orderId}</span> đã được ghi nhận.
+              Phản hồi của quý khách về đơn hàng <span className="font-semibold text-orange-600">#{bookingId}</span> đã được ghi nhận.
               Chúng tôi sẽ cải thiện dịch vụ để phục vụ bạn tốt hơn.
             </p>
             
@@ -90,7 +90,7 @@ export default function FeedbackPage() {
               <div className="bg-gradient-to-r from-orange-500 to-red-500 px-8 py-12 text-white text-center">
                 <h1 className="text-4xl font-bold mb-2">Phản hồi của bạn</h1>
                 <p className="text-orange-100 text-lg">
-                  Đơn hàng <span className="font-semibold">#{orderId}</span>
+                  Đơn hàng <span className="font-semibold">#{bookingId}</span>
                 </p>
               </div>
 

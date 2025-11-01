@@ -29,7 +29,7 @@ const ContactPage = () => {
     const xhr = new XMLHttpRequest();
     
     // Thay YOUR_FORMSPREE_FORM_ID bằng ID form của bạn từ Formspree
-    xhr.open("POST", "https://formspree.io/f/mrboyvzw");
+    xhr.open("POST", "https://formspree.io/f/xjkppenv");
     xhr.setRequestHeader("Accept", "application/json");
     xhr.onreadystatechange = () => {
       if (xhr.readyState !== XMLHttpRequest.DONE) return;
