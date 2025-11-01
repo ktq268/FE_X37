@@ -23,7 +23,6 @@ const TableForm = ({ restaurantId, initialData, onSuccess }) => {
 
       onSuccess();
     } catch (err) {
-      console.error(err);
       message.error("Không thể lưu bàn");
     }
   };

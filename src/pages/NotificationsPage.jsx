@@ -36,7 +36,6 @@ const NotificationsPage = () => {
       const bookings = await getPendingBookings(token, filters);
       setPendingBookings(Array.isArray(bookings) ? bookings : []);
     } catch (err) {
-      console.error('Error fetching pending bookings:', err);
       setError('Không thể tải thông báo đặt bàn. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
@@ -48,7 +47,7 @@ const NotificationsPage = () => {
       const restaurantList = await getRestaurants();
       setRestaurants(Array.isArray(restaurantList) ? restaurantList : []);
     } catch (err) {
-      console.error('Error fetching restaurants:', err);
+
       setError('Không thể tải danh sách nhà hàng. Vui lòng thử lại.');
     }
   };
@@ -59,7 +58,6 @@ const NotificationsPage = () => {
       const rid = typeof restaurantId === 'string' ? restaurantId : (restaurantId?._id || restaurantId?.id);
       
       if (!rid) {
-        console.error('Invalid restaurantId:', restaurantId);
         return;
       }
       
@@ -75,7 +73,6 @@ const NotificationsPage = () => {
       );
       setAvailableTables(available);
     } catch (err) {
-      console.error('Error fetching tables:', err);
       setError('Không thể tải danh sách bàn. Vui lòng thử lại.');
     }
   };
@@ -135,28 +132,47 @@ const NotificationsPage = () => {
     setShowTableModal(true);
   };
 
+  // Trong NotificationsPage component: confirmAccept
   const confirmAccept = async () => {
     if (!currentBooking || !selectedTableId) return;
-    
+  
+    // Chặn nếu thiếu email để tránh lỗi BE
+    if (!currentBooking.customerEmail) {
+      showWarning('Thiếu email khách hàng', 'Booking này không có email. Vui lòng bổ sung trước khi xác nhận.');
+      return;
+    }
+  
     try {
-      // Update booking with tableId
-      await updateBookingStatus(currentBooking._id, 'confirmed', token, { tableId: selectedTableId });
-      
-      // Update table status to reserved
-      try {
-        const { updateTableStatusById } = await import('../api/api.js');
-        await updateTableStatusById(selectedTableId, 'reserved', token);
-      } catch (tableError) {
-        console.warn('Could not update table status:', tableError);
-      }
-      
+      // 1) Xác nhận booking và gán bàn
+      await updateBookingStatus(
+        currentBooking._id,
+        'confirmed',
+        token,
+        { tableId: selectedTableId }
+      );
+  
+      // 2) Cập nhật bàn reserved kèm đầy đủ dữ liệu
+      await updateTableStatusById(
+        selectedTableId,
+        'reserved',
+        token,
+        {
+          date: currentBooking.date,
+          time: currentBooking.time,
+          customerName: currentBooking.customerName,
+          customerEmail: currentBooking.customerEmail,
+          customerPhone: currentBooking.customerPhone,
+          adults: currentBooking.adults ?? 1,
+          children: currentBooking.children ?? 0,
+        }
+      );
+  
       // Update UI
       setPendingBookings(pendingBookings.filter(booking => booking._id !== currentBooking._id));
       setShowTableModal(false);
       setSelectedTableId('');
       setCurrentBooking(null);
     } catch (err) {
-      console.error('Error accepting booking:', err);
       showError(
         'Xác nhận đặt bàn thất bại',
         'Chúng tôi không thể xác nhận đặt bàn lúc này. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ.'
@@ -170,7 +186,6 @@ const NotificationsPage = () => {
       // Cập nhật UI sau khi từ chối
       setPendingBookings(pendingBookings.filter(booking => booking._id !== bookingId));
     } catch (err) {
-      console.error('Error rejecting booking:', err);
       showError(
         'Từ chối đặt bàn thất bại',
         'Chúng tôi không thể từ chối đặt bàn lúc này. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ.'

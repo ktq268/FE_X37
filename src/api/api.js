@@ -6,6 +6,7 @@ async function request(endpoint, options = {}, token = null) {
   const headers = {
     "Content-Type": "application/json",
     ...(token && { "x-auth-token": token }),
+    ...(options.headers || {}),
   };
 
   const url = `${API_URL}${endpoint}`;
@@ -287,7 +288,7 @@ export async function updateBookingStatus(
   if (!status) throw new Error("status is required");
   return request(
     `/api/bookings/${bookingId}/status`,
-    { method: "GET", body: JSON.stringify({ status, ...additionalData }) },
+    { method: "PATCH", body: JSON.stringify({ status, ...additionalData }) },
     token
   );
 }
@@ -473,15 +474,18 @@ export const exportInvoicePdf = async (invoiceId, token) => {
 
 
 // --- FEEDBACK ---
-// Gửi phản hồi theo booking (chuẩn API hiện tại)
+// Gửi phản hồi theo order
 export async function sendFeedback(data, token) {
-  // data: { bookingId, rating, comment, images? }
-  if (!data?.bookingId) throw new Error("bookingId is required");
+  // data: { orderId, rating, comment }
+  if (!data?.orderId) throw new Error("orderId is required");
   return request(
-    `/api/feedback`,
+    `/api/orders/${data.orderId}/feedback`,
     {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ 
+        rating: data.rating, 
+        comment: data.comment 
+      }),
     },
     token
   );
@@ -492,6 +496,24 @@ export const getFeedbackStats = async (restaurantId, token) => {
   const qs = restaurantId ? `?restaurantId=${restaurantId}` : "";
   return request(`/api/reports/feedback${qs}`, { method: "GET" }, token);
 };
+
+export async function getFeedbacks(params = {}, token) {
+  const query = new URLSearchParams(
+    Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    )
+  ).toString();
+
+  // cache-busting để tránh 304
+  const ts = Date.now();
+  const url = `/api/feedback${query ? `?${query}&ts=${ts}` : `?ts=${ts}`}`;
+
+  return request(
+    url,
+    { method: 'GET', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } },
+    token
+  );
+}
 
 // Admin: Dashboard metrics (bàn, món, doanh thu orders)
 export async function getDashboardMetrics(restaurantId, token) {
