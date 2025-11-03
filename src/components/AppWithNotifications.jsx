@@ -12,9 +12,10 @@ import MenuPage from '../pages/MenuPage';
 import CartPage from '../pages/CartPage';
 import ForgotPassword from '../pages/ForgotPassword';
 import ResetPassword from '../pages/ResetPassword';
+import FeedbackPage from '../pages/FeedbackPage';
+import ContactPage from '../pages/ContactPage';
 import StaffOnlyRoute from '../routes/StaffOnlyRoute';
 import AdminOnlyRoute from '../routes/AdminOnlyRoute';
-
 import { CartProvider } from "../contexts/CartContext";
 import { ToastProvider } from "../contexts/ToastContext";
 
@@ -32,7 +33,7 @@ const AppContent = () => {
           <Route path="/reset-password/:token" element={<ResetPassword />} />
           <Route path="/booking" element={<BookingPage />} />
           <Route path="/booking-success" element={<BookingSuccess />} />
-
+          <Route path="/contact" element={<ContactPage />} />
           {/* Staff only */}
           <Route
             path="/staff"
@@ -55,6 +56,7 @@ const AppContent = () => {
 
           <Route path="/menu" element={<MenuPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/feedback" element={<FeedbackPage />} />
         </Routes>
         
         <NotificationProvider 

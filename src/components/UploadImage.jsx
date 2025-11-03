@@ -18,7 +18,6 @@ const UploadImage = ({ onUploaded }) => {
       message.success("Tải ảnh thành công!");
       onUploaded(res.data.url);
     } catch (err) {
-      console.error("Upload error:", err);
       message.error("Upload thất bại!");
     } finally {
       setLoading(false);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X } from 'lucide-react';
 
 const OrderDetailModal = ({
@@ -10,6 +10,7 @@ const OrderDetailModal = ({
   onGoToInvoice
 }) => {
   if (!showOrderDetailModal || !selectedOrder) return null;
+
   
   const config = statusConfig[selectedOrder.status];
   
@@ -31,7 +32,11 @@ const OrderDetailModal = ({
             </div>
             <div>
               <span className="text-gray-600">Bàn số:</span>
-              <div className="font-medium">Bàn {selectedOrder.tableNumber}</div>
+              <div className="font-medium">{selectedOrder.tableNumber || 'N/A'}</div>
+            </div>
+            <div>
+              <span className="text-gray-600">Chi nhánh:</span>
+              <div className="font-medium">{selectedOrder.restaurantName || selectedOrder.restaurant || 'N/A'}</div>
             </div>
             <div>
               <span className="text-gray-600">Thời gian:</span>
@@ -74,7 +79,7 @@ const OrderDetailModal = ({
               {selectedOrder.status === 'pending' && (
                 <button 
                   onClick={() => {
-                    onUpdateOrderStatus(selectedOrder.id, 'preparing');
+                    onUpdateOrderStatus(selectedOrder.id || selectedOrder._id, 'preparing');
                     onClose();
                   }}
                   className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded-lg font-medium transition"
@@ -85,7 +90,7 @@ const OrderDetailModal = ({
               {selectedOrder.status === 'preparing' && (
                 <button 
                   onClick={() => {
-                    onUpdateOrderStatus(selectedOrder.id, 'served');
+                    onUpdateOrderStatus(selectedOrder.id || selectedOrder._id, 'served');
                     onClose();
                   }}
                   className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition"
@@ -112,4 +117,31 @@ const OrderDetailModal = ({
   );
 };
 
+
+  // Small helper button component that performs an async action and closes modal on success
+  function AsyncActionButton({ label, className = '', onAction, onClose }) {
+    const [loading, setLoading] = useState(false);
+
+    const handleClick = async () => {
+      if (loading) return;
+      try {
+        setLoading(true);
+        const result = await onAction();
+        // If action returns true-ish, close modal
+        if (result !== false) {
+          if (typeof onClose === 'function') onClose();
+        }
+      } catch (err) {
+        console.error('AsyncActionButton error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <button onClick={handleClick} disabled={loading} className={`${className} ${loading ? 'opacity-60 cursor-not-allowed' : ''}`}>
+        {loading ? 'Đang xử lý...' : label}
+      </button>
+    );
+  }
 export default OrderDetailModal;

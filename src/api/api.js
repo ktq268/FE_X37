@@ -6,6 +6,7 @@ async function request(endpoint, options = {}, token = null) {
   const headers = {
     "Content-Type": "application/json",
     ...(token && { "x-auth-token": token }),
+    ...(options.headers || {}),
   };
 
   const url = `${API_URL}${endpoint}`;
@@ -304,13 +305,6 @@ export async function getBookingsByRestaurant(restaurantId, query = {}, token) {
 }
 
 
-// ADMIN: Dashboard
-export const getFeedbackStats = async (token) => {
-  return request(`/api/reports/feedback`, 
-    { method: "GET" },
-    token
-  );
-};
 
 // --- ADMIN: REVENUE REPORT (Báo cáo doanh thu) ---
 // Endpoint: GET /api/reports/revenue?restaurantId=...&range=...&from=...&to=...
@@ -439,15 +433,95 @@ export const createInvoiceFromOrder = async (orderId, token) => {
 
 // Xuất PDF hóa đơn (/:id/export-pdf)
 export const exportInvoicePdf = async (invoiceId, token) => {
-  return request(
-    `/api/invoices/${invoiceId}/export-pdf`,
-    { method: "GET" },
-    token
-  );
+  const url = `${API_URL}/api/invoices/${invoiceId}/export-pdf`;
+  
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "x-auth-token": token,
+      },
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("PDF export error response:", errorText);
+      throw new Error(`Xuất PDF thất bại (${res.status}): ${errorText || res.statusText}`);
+    }
+
+    // Kiểm tra Content-Type để đảm bảo đó là PDF
+    const contentType = res.headers.get("content-type");
+    console.log("📄 Response Content-Type:", contentType);
+
+    // Nếu BE trả về JSON (error case), xử lý đặc biệt
+    if (contentType && contentType.includes("application/json")) {
+      const jsonData = await res.json();
+      throw new Error(jsonData.message || "Lỗi khi xuất PDF");
+    }
+
+    // Trả về Blob với đúng MIME type
+    const blob = await res.blob();
+    console.log("✅ Blob size:", blob.size, "bytes");
+    
+    // Tạo blob với MIME type chính xác
+    const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+    return pdfBlob;
+  } catch (error) {
+    console.error("Export PDF error:", error);
+    throw error;
+  }
 };
 
+
 // --- FEEDBACK ---
-// Gửi phản hồi cho 1 order
+// Gửi phản hồi theo order
+export async function sendFeedback(data, token) {
+  // data: { orderId, rating, comment }
+  if (!data?.orderId) throw new Error("orderId is required");
+  return request(
+    `/api/orders/${data.orderId}/feedback`,
+    {
+      method: "POST",
+      body: JSON.stringify({ 
+        rating: data.rating, 
+        comment: data.comment 
+      }),
+    },
+    token
+  );
+}
+
+// Admin: Feedback stats theo chi nhánh
+export const getFeedbackStats = async (restaurantId, token) => {
+  const qs = restaurantId ? `?restaurantId=${restaurantId}` : "";
+  return request(`/api/reports/feedback${qs}`, { method: "GET" }, token);
+};
+
+export async function getFeedbacks(params = {}, token) {
+  const query = new URLSearchParams(
+    Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+    )
+  ).toString();
+
+  // cache-busting để tránh 304
+  const ts = Date.now();
+  const url = `/api/feedback${query ? `?${query}&ts=${ts}` : `?ts=${ts}`}`;
+
+  return request(
+    url,
+    { method: 'GET', cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } },
+    token
+  );
+}
+
+// Admin: Dashboard metrics (bàn, món, doanh thu orders)
+export async function getDashboardMetrics(restaurantId, token) {
+  if (!restaurantId) throw new Error("restaurantId is required");
+  return request(`/api/reports/metrics?restaurantId=${restaurantId}`, { method: "GET" }, token);
+}
+
+// Gửi phản hồi cho 1 order (DEPRECATED - router CJS không dùng)
 export async function sendOrderFeedback(orderId, data, token) {
   if (!orderId) throw new Error("orderId is required");
   return request(

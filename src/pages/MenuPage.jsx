@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search,
   ArrowLeft,
@@ -17,7 +17,8 @@ import LoadingSpinner from "../components/LoadingSpinner/LoadingSpinner";
 import Header from "../components/Header/Header";
 import Footer from "../components/Footer/Footer";
 import { Swiper, SwiperSlide } from "swiper/react";
-import "swiper/css";
+import { Virtual } from 'swiper/modules';
+import 'swiper/css';
 
 export default function MenuPage() {
   const [fullMenu, setFullMenu] = useState([]); // menu group theo category
@@ -72,8 +73,10 @@ export default function MenuPage() {
   }, [withLoading, showError]);
 
   // tìm kiếm món ăn
-  async function handleSearch(e) {
-    e.preventDefault();
+  const handleSearch = useCallback(async (e) => {
+    if (e) {
+      e.preventDefault();
+    }
     
     if (!searchTerm.trim()) {
       setItems([]); // clear search → hiển thị lại full menu
@@ -81,11 +84,36 @@ export default function MenuPage() {
     }
     
     try {
-      const data = await withLoading(
-        () => getMenuItems({ q: searchTerm }),
-        "Đang tìm kiếm..."
-      );
-      setItems(data.items || []);
+      // Tìm kiếm trong full menu trước
+      const searchTermLower = searchTerm.trim().toLowerCase();
+      let searchResults = [];
+      
+      // Tìm trong full menu đã load
+      const localResults = fullMenu.reduce((acc, category) => {
+        const matchingItems = category.items.filter(item => 
+          item.name.toLowerCase().includes(searchTermLower)
+        );
+        return [...acc, ...matchingItems];
+      }, []);
+
+      if (localResults.length > 0) {
+        searchResults = localResults;
+      } else {
+        // Nếu không tìm thấy trong cache, gọi API
+        const data = await withLoading(
+          () => getMenuItems({ q: searchTermLower }),
+          "Đang tìm kiếm..."
+        );
+        searchResults = Array.isArray(data) ? data : data?.items || [];
+      }
+
+      setItems(searchResults);
+      
+      if (searchResults.length === 0) {
+        showError(
+          `Không tìm thấy món “${searchTerm}”`
+        );
+      }
     } catch (err) {
       console.error("Search failed", err);
       showError(
@@ -93,20 +121,20 @@ export default function MenuPage() {
         "Không thể tìm kiếm món ăn. Vui lòng thử lại sau."
       );
     }
-  }
+  }, [searchTerm, fullMenu, withLoading, showError]);
 
   // Tìm kiếm real-time khi gõ
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (searchTerm.trim()) {
-        handleSearch({ preventDefault: () => {} });
+        handleSearch();
       } else {
         setItems([]);
       }
     }, 500); // Debounce 500ms
 
     return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
+  }, [searchTerm, handleSearch]);
 
   // xem chi tiết món ăn
   async function handleViewDetail(id) {
@@ -187,6 +215,27 @@ export default function MenuPage() {
       <div className="container mx-auto px-4 py-12 mt-20">
         {isLoading ? (
           <LoadingSpinner size="large" text="Đang tải..." />
+        ) : searchTerm.trim() && items.length === 0 ? (
+          <div>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-bold text-gray-800">
+                Kết quả tìm kiếm cho "{searchTerm}"
+              </h2>
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setItems([]);
+                }}
+                className="flex items-center gap-2 text-orange-500 hover:text-orange-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Xóa tìm kiếm
+              </button>
+            </div>
+            <div className="text-center text-gray-600">
+              Không tìm thấy món cho “{searchTerm}”.
+            </div>
+          </div>
         ) : items.length > 0 ? (
           // Search Results
           <div>
@@ -206,8 +255,11 @@ export default function MenuPage() {
               </button>
             </div>
             <Swiper
+              modules={[Virtual]}
               spaceBetween={16}
               slidesPerView={2}
+              grabCursor={true}
+              touchRatio={1}
               breakpoints={{
                 640: { slidesPerView: 3 },
                 1024: { slidesPerView: 4 },
@@ -270,8 +322,11 @@ export default function MenuPage() {
                   <div className="w-24 h-1 bg-gradient-to-r from-orange-500 to-red-500 mx-auto rounded-full"></div>
                 </div>
                 <Swiper
+                  modules={[Virtual]}
                   spaceBetween={16}
                   slidesPerView={2}
+                  grabCursor={true}
+                  touchRatio={1}
                   breakpoints={{
                     640: { slidesPerView: 3 },
                     1024: { slidesPerView: 4 },

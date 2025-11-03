@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings, getRestaurants, getOrders } from '../api/api.js';
-import { Building, LogOut } from 'lucide-react';
-import NotificationsPage from './NotificationsPage.jsx';
+import { Building, LogOut, Eye, Printer, X } from 'lucide-react';
 import { useNotification } from '../hooks/useNotification.js';
+import { useToast } from '../contexts/ToastContext.jsx';
+import { getTables, updateTableStatusById, getBookingsByTable, updateBookingStatus, getPendingBookings, getRestaurants, getOrders, staffUpdateOrderStatus, staffGetOrders, createInvoiceFromOrder, createReservation } from '../api/api.js';
+import NotificationsPage from './NotificationsPage.jsx';
+import html2pdf from 'html2pdf.js';
 
 // Import các component mới
 import {
@@ -15,11 +17,11 @@ import {
   Navigation
 } from '../components/Staff';
 
-const staffPage = () => {
+const StaffPage = () => {
   const [currentPage, setCurrentPage] = useState("orders");
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [filterStatus, setFilterStatus] = useState("pending");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [showTableModal, setShowTableModal] = useState(false);
   const [showOrderDetailModal, setShowOrderDetailModal] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -51,9 +53,10 @@ const staffPage = () => {
   const [refreshTimeout, setRefreshTimeout] = useState(null);
   const [lastApiCall, setLastApiCall] = useState(0);
 
-  const { showWarning } = useNotification();
-const token =
-  typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const { showWarning, showError } = useNotification();
+  const { showSuccess } = useToast();
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   // useNavigate để redirect sau khi thanh toán
   const navigate = useNavigate();
@@ -63,7 +66,7 @@ const token =
       case "pending":
         return "pending";
       case "confirmed":
-        return "preparing";
+        return "confirmed"; // hiển thị đúng trạng thái đã xác nhận
       case "seated":
         return "served";
       case "completed":
@@ -78,17 +81,36 @@ const token =
   };
 
   const feToBeOrderStatus = (status) => {
+    // Map frontend status names to backend allowed status values
     switch (status) {
       case "pending":
-        return "confirmed";
+        return "pending";
+      case "confirmed":
+        return "confirmed"; // cho phép FE gửi confirmed lên BE
       case "preparing":
-        return "seated";
+        return "confirmed"; // vẫn hỗ trợ flow cũ nếu FE dùng preparing
       case "served":
-        return "completed";
+        return "seated";
       case "completed":
         return "completed";
       default:
-        return "confirmed";
+        return status;
+    }
+  };
+
+  // Mapping for orders endpoint: backend expects these values for orders
+  const feToOrdersApiStatus = (status) => {
+    switch (status) {
+      case "pending":
+        return "pending";
+      case "preparing":
+        return "preparing";
+      case "served":
+        return "served";
+      case "completed":
+        return "completed";
+      default:
+        return status;
     }
   };
 
@@ -360,6 +382,13 @@ const loadPendingNotifications = async () => {
       bgColor: "bg-red-50",
       borderColor: "border-red-300",
     },
+    confirmed: {
+      label: "Đã xác nhận",
+      color: "bg-yellow-500",
+      textColor: "text-yellow-700",
+      bgColor: "bg-yellow-50",
+      borderColor: "border-yellow-300",
+    },
     preparing: {
       label: "Đang làm",
       color: "bg-yellow-500",
@@ -425,6 +454,8 @@ const loadPendingNotifications = async () => {
       <div
         onClick={() => {
           setSelectedOrder(order);
+          console.log("Selected order:", order);
+      
           setShowOrderDetailModal(true);
         }}
         className={`border-2 ${config.borderColor} rounded-lg p-3 ${config.bgColor} hover:shadow-lg transition-all cursor-pointer min-w-[280px]`}
@@ -469,75 +500,143 @@ const loadPendingNotifications = async () => {
   };
 
   const updateOrderStatus = async (orderId, newStatus) => {
+    console.log('updateOrderStatus called with:', { orderId, newStatus });
+    
+    if (!orderId) {
+      showError('Lỗi cập nhật', 'Không tìm thấy mã đơn hàng');
+      return;
+    }
+
     try {
+      // 1. Kiểm tra trong orders (bookings từ bàn cụ thể)
       const order = orders.find((o) => (o.id || o._id) === orderId);
-      if (order) {
+      if (order && order.bookingId) {
         const beStatus = feToBeOrderStatus(newStatus);
-        await updateBookingStatus(order.bookingId || orderId, beStatus, token);
+        await updateBookingStatus(order.bookingId, beStatus, token);
         await refreshOrdersForTable(currentOrdersTable);
         return;
       }
+
+      // 2. Kiểm tra trong onlineOrders
       const online = onlineOrders.find((o) => (o.id || o._id) === orderId);
-      if (!order && !online) {
-        // Fallback: update generic staff order by id
-        await staffUpdateOrderStatus(orderId, newStatus, token);
-        await fetchOrders();
-        return;
-      }
       if (online) {
         await staffUpdateOrderStatus(orderId, newStatus, token);
         await refreshOnlineOrders();
         return;
       }
+
+      // 3. Kiểm tra trong ordersList (orders từ trang Orders)
+      const orderFromList = ordersList.find((o) => (o.id || o._id) === orderId);
+      if (orderFromList) {
+        await staffUpdateOrderStatus(orderId, newStatus, token);
+        await fetchOrders();
+        return;
+      }
+
+      // 4. Fallback: Thử cập nhật trực tiếp bằng ID
+      await staffUpdateOrderStatus(orderId, newStatus, token);
+      await fetchOrders();
     } catch (e) {
+      console.error('Error updating order status:', e);
       showError(
         'Cập nhật trạng thái đơn hàng thất bại',
         e.message || 'Chúng tôi không thể cập nhật trạng thái đơn hàng lúc này. Vui lòng thử lại sau.'
       );
+      return false;
     }
   };
 
-  // changeTableStatus
-  const changeTableStatus = async (
-    tableNumber,
-    newStatus,
-    customerInfo = null
-  ) => {
-    try {
-      const table = tables.find(t => String(t.tableNumber) === String(tableNumber));
-      if (!table) throw new Error(`Không tìm thấy bàn số ${tableNumber}`);
-  
-      const tableId = table._id || table.id;
-      if (!tableId) throw new Error(`Không tìm thấy ID của bàn ${tableNumber}`);
-  
-      // Cập nhật trạng thái trên server với thông tin ngày được chọn + thông tin khách (nếu có)
-    await updateTableStatusById(
-      tableId,
-      newStatus,
-      token,
-      {
-        date: selectedDate,
-        ...(customerInfo && typeof customerInfo === 'object' ? customerInfo : {})
+const changeTableStatus = async (
+  tableNumber,
+  newStatus,
+  customerInfo = null
+) => {
+  try {
+    const table = tables.find(t => String(t.tableNumber) === String(tableNumber));
+    if (!table) throw new Error(`Không tìm thấy bàn số ${tableNumber}`);
+
+    const tableId = table._id || table.id;
+    if (!tableId) throw new Error(`Không tìm thấy ID của bàn ${tableNumber}`);
+
+    // Nếu tạo booking trực tiếp cho bàn => tạo booking và đặt confirmed
+    if (
+      newStatus === 'reserved' &&
+      selectedRestaurant &&
+      customerInfo &&
+      typeof customerInfo === 'object'
+    ) {
+      if (!customerInfo.customerEmail) {
+        showWarning('Thiếu email', 'Vui lòng nhập email khách hàng trước khi xác nhận bàn.');
+        return;
       }
-    );
-  
-      // Gọi lại API để đồng bộ trạng thái bàn mới nhất cho ngày được chọn
-      await refreshTables(selectedRestaurant ? { 
+      const time = customerInfo.time || selectedTime;
+      const bookingData = {
         restaurantId: selectedRestaurant._id || selectedRestaurant.id,
-        date: selectedDate 
-      } : { date: selectedDate });
-  
-      // Nếu đang xem bàn này thì load lại order
-      if (currentOrdersTable && String(currentOrdersTable.tableNumber) === String(tableNumber)) {
-        await refreshOrdersForTable(table);
+        tableId: tableId,
+        date: selectedDate,
+        time,
+        adults: Number(customerInfo.adults || 2),
+        children: Number(customerInfo.children || 0),
+        customerName: customerInfo.customerName || 'Khách lẻ',
+        customerPhone: customerInfo.customerPhone || '',
+        customerEmail: customerInfo.customerEmail || '',
+        note: customerInfo.note || '',
+      };
+
+      const result = await createReservation(bookingData, token);
+      if (result && result._id) {
+        await updateBookingStatus(result._id, 'confirmed', token);
+        if (typeof showSuccess === 'function') {
+          showSuccess('Xác nhận', 'Đã tạo booking và xác nhận!');
+        }
+
+        await updateTableStatusById(
+          tableId,
+          'reserved',
+          token,
+          {
+            date: selectedDate,
+            bookingId: result._id,
+            customerName: bookingData.customerName,
+            customerEmail: bookingData.customerEmail,
+            customerPhone: bookingData.customerPhone,
+            adults: bookingData.adults,
+            children: bookingData.children,
+            time: bookingData.time,
+          }
+        );
+      } else {
+        throw new Error('Không thể tạo booking cho bàn này');
       }
-    } catch (e) {
-      showError(
-        'Cập nhật trạng thái bàn thất bại',
-        e.message || 'Chúng tôi không thể cập nhật trạng thái bàn lúc này. Vui lòng thử lại sau.'
+    } else {
+      // Các thay đổi trạng thái khác giữ nguyên
+      await updateTableStatusById(
+        tableId,
+        newStatus,
+        token,
+        {
+          date: selectedDate,
+          ...(customerInfo && typeof customerInfo === 'object' ? customerInfo : {})
+        }
       );
     }
-  };
+
+    await refreshTables(
+      selectedRestaurant
+        ? { restaurantId: selectedRestaurant._id || selectedRestaurant.id, date: selectedDate }
+        : { date: selectedDate }
+    );
+
+    if (currentOrdersTable && String(currentOrdersTable.tableNumber) === String(tableNumber)) {
+      await refreshOrdersForTable(table);
+    }
+  } catch (e) {
+    showError(
+      'Cập nhật trạng thái bàn thất bại',
+      e.message || 'Chúng tôi không thể cập nhật trạng thái bàn lúc này. Vui lòng thử lại sau.'
+    );
+  }
+};
 
 
 
@@ -676,15 +775,36 @@ const loadPendingNotifications = async () => {
 
   const handleCreateBookingForTable = async (bookingFormData, table, restaurant) => {
     const [date, time] = bookingFormData.dateTime.split('T');
-    
-    // Import createReservation and updateBookingStatus functions
-    const { createReservation, updateBookingStatus } = await import('../api/api.js');
-    
+
+    // Kiểm tra bàn đã có booking tại cùng thời điểm chưa
+    const isTimeEqual = (a = '', b = '') => a.slice(0, 5) === b.slice(0, 5);
+    const tableId = table._id || table.id;
+
+    try {
+      const existing = await getBookingsByTable(tableId, { date }, token);
+      const bookings = Array.isArray(existing) ? existing : (existing?.bookings || []);
+      const hasConflict = bookings.some(b => {
+        const status = String(b.status || '').toLowerCase();
+        return ['confirmed', 'pending', 'seated'].includes(status) && isTimeEqual(b.time, time);
+      });
+
+      if (hasConflict) {
+        // Không tạo mới, cảnh báo trùng lịch
+        showWarning('Bàn đã được đặt', 'Thời gian này đã có booking. Vui lòng chọn giờ khác.');
+        return;
+      }
+    } catch (e) {
+      // Nếu không kiểm tra được (lỗi mạng), vẫn an toàn không tạo
+      showError('Lỗi kiểm tra lịch', e.message || 'Không thể kiểm tra lịch bàn. Vui lòng thử lại.');
+      return;
+    }
+
+    // Tạo booking và xác nhận ngay
     const bookingData = {
       restaurantId: restaurant?._id || restaurant?.id,
-      tableId: table._id || table.id,
-      date: date,
-      time: time,
+      tableId,
+      date,
+      time,
       adults: parseInt(bookingFormData.adults),
       children: parseInt(bookingFormData.children) || 0,
       customerName: `${bookingFormData.firstName} ${bookingFormData.lastName}`,
@@ -693,30 +813,33 @@ const loadPendingNotifications = async () => {
       note: bookingFormData.note,
     };
 
-    const result = await createReservation(bookingData, token);
-    
-    // Ngay sau khi staff tạo, đặt booking thành confirmed
-  if (result && result._id) {
-    await updateBookingStatus(result._id, 'confirmed', token);
-  }
-    
-    if (result && result._id) {
-    // Truyền đầy đủ info để backend gửi mail đúng khách
-    await changeTableStatus(
-      table.tableNumber,
-      'reserved',
-      {
-        customerName: `${bookingFormData.firstName} ${bookingFormData.lastName}`,
-        customerEmail: bookingFormData.email,
-        customerPhone: bookingFormData.phone,
-        adults: parseInt(bookingFormData.adults),
-        children: parseInt(bookingFormData.children) || 0,
-        time
+    try {
+      const result = await createReservation(bookingData, token);
+
+      // Ngay sau khi tạo, đặt booking thành confirmed
+      if (result && result._id) {
+        await updateBookingStatus(result._id, 'confirmed', token);
+        // Cập nhật trạng thái bàn và gắn metadata để backend nắm thông tin
+        await changeTableStatus(
+          table.tableNumber,
+          'reserved',
+          {
+            customerName: bookingData.customerName,
+            customerEmail: bookingData.customerEmail,
+            customerPhone: bookingData.customerPhone,
+            adults: bookingData.adults,
+            children: bookingData.children,
+            time
+          }
+        );
+        showSuccess('Thành công', 'Đã tạo booking và xác nhận!');
+      } else {
+        throw new Error('Đặt bàn thất bại');
       }
-    );
-  } else {
-    throw new Error('Đặt bàn thất bại');
-  }
+    } catch (err) {
+      // Nếu backend trả về 400 "Table already booked at this time" thì báo rõ cho người dùng
+      showError('Không thể tạo booking', err.message || 'Có lỗi xảy ra khi tạo booking');
+    }
   };
 
   const BillModal = () => {
@@ -1009,4 +1132,4 @@ const loadPendingNotifications = async () => {
   );
 };
 
-export default staffPage;
+export default StaffPage;

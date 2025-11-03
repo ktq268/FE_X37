@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { RefreshCw, Printer, CheckCircle, Wallet, CreditCard, QrCode } from 'lucide-react';
+import QRCode from "react-qr-code";
 import HeaderComponent from './HeaderComponent';
+import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../hooks/useNotification.js';
+import { createInvoiceFromOrder, exportInvoicePdf } from '../../api/api.js';
 
 const InvoicePage = ({
   selectedRestaurant,
@@ -16,10 +19,78 @@ const InvoicePage = ({
   const [discount, setDiscount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const { showSuccess, showError } = useNotification();
+  const navigate = useNavigate();
   
   const order = selectedOrder || orders[0] || {};
   const subtotal = selectedOrder?.total ?? 0;
   const finalTotal = subtotal - discount;
+
+  const handlePrintInvoice = async (orderId) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        showError("Lỗi", "Bạn cần đăng nhập lại để in hóa đơn.");
+        return;
+      }
+
+      if (!orderId) {
+        showError("Lỗi", "Không tìm thấy mã đơn hàng.");
+        return;
+      }
+
+      // 1️⃣ Tạo hóa đơn mới (nếu chưa có)
+
+      const createdInvoice = await createInvoiceFromOrder(orderId, token);
+      const invoiceId = createdInvoice?.invoice?._id || createdInvoice?._id;
+
+      if (!invoiceId) {
+        showError("Lỗi", "Không thể tạo hóa đơn. Vui lòng thử lại.");
+        return;
+      }
+
+
+
+      // 2️⃣ Xuất PDF (gọi API 1 lần duy nhất)
+
+      const blob = await exportInvoicePdf(invoiceId, token);
+
+      // Debug: Check blob type
+
+
+      if (!blob || blob.size === 0) {
+        showError("Lỗi", "File PDF không hợp lệ hoặc rỗng.");
+        return;
+      }
+
+      // 3️⃣ Tạo URL từ Blob
+      const url = window.URL.createObjectURL(blob);
+
+
+      // 4️⃣ Mở PDF trong tab mới (để xem trước)
+      const previewWindow = window.open(url, '_blank');
+      
+      // 5️⃣ Đồng thời tự động tải xuống
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `HoaDon_${invoiceId}_${new Date().getTime()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      // Cleanup sau 1 phút (để đảm bảo PDF đã load trong tab mới)
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+
+      }, 60000);
+
+      showSuccess("Thành công", "Hóa đơn đã được tải xuống và mở trong tab mới!");
+    } catch (error) {
+      showError(
+        "Lỗi in hóa đơn",
+        error.message || "Không thể in hóa đơn. Vui lòng thử lại!"
+      );
+    }
+  };
   
   return (
     <div className="h-full flex flex-col">
@@ -140,20 +211,66 @@ const InvoicePage = ({
                 </button>
               </div>
             </div>
+
+            {paymentMethod === 'qr' && (
+            <div className="relative bg-white border rounded-lg p-4 mt-3 flex flex-col items-center">
+              <button
+                onClick={() => setPaymentMethod('')}
+                className="absolute top-2 right-2 text-gray-500 hover:text-red-500"
+              >
+                ✕
+              </button>
+
+              <h4 className="text-sm font-semibold mb-2 text-gray-700">
+                Quét mã để thanh toán
+              </h4>
+
+              <div className="bg-white p-3 border rounded-lg">
+                <QRCode
+                  value="MAISON DE FLAVORS - STK 0123456789 - Vietcombank"
+                  size={150}
+                />
+              </div>
+
+              <p className="mt-3 text-xs text-gray-600 text-center">
+                <span className="font-medium">Maison De Flavors</span><br />
+                STK: <span className="font-semibold">0123456789</span><br />
+                Ngân hàng: Vietcombank
+              </p>
+            </div>
+            )}
+
             
             <div className="grid grid-cols-2 gap-2">
-              <button className="bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm">
+              <button 
+                onClick={() => {
+                  const orderId = selectedOrder?._id || selectedOrder?.id || order?._id || order?.id;
+                  if (orderId) {
+                    handlePrintInvoice(orderId);
+                  } else {
+                    showError("Lỗi", "Không tìm thấy mã đơn hàng để in hóa đơn.");
+                  }
+                }} 
+                className="bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-1 transition text-sm"
+              >
                 <Printer size={16} />
                 In bill
               </button>
-              <button 
+              <button
                 onClick={async () => {
                   try {
-                    await onUpdateOrderStatus(order.id, 'completed');
+                    const orderId = selectedOrder?._id || selectedOrder?.id || order?._id || order?.id;
+                    if (!orderId) {
+                      showError('Lỗi', 'Không tìm thấy mã đơn hàng.');
+                      return;
+                    }
+                    await onUpdateOrderStatus(orderId, 'completed');
                     showSuccess(
                       'Thanh toán thành công',
-                      `Đơn hàng #${order.id} đã được thanh toán thành công. Cảm ơn quý khách!`
+                      `Đơn hàng #${orderId} đã được thanh toán thành công. Cảm ơn quý khách!`
                     );
+                    // Sau khi thanh toán thành công, chuyển sang trang phản hồi và truyền orderId
+                    navigate(`/feedback?orderId=${orderId}`);
                   } catch (e) {
                     showError(
                       'Thanh toán thất bại',
