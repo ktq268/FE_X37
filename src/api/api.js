@@ -1,5 +1,5 @@
 // api.js (Đã sửa đổi hoàn chỉnh)
-const API_URL = "http://localhost:3000";
+const API_URL = "https://be-x37-eight.vercel.app";
 
 // Hàm tiện ích để gọi API với error handling chuẩn hóa
 async function request(endpoint, options = {}, token = null) {
@@ -500,7 +500,7 @@ export const getFeedbackStats = async (restaurantId, token) => {
 export async function getFeedbacks(params = {}, token) {
   const query = new URLSearchParams(
     Object.fromEntries(
-      Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+      Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
     )
   ).toString();
 
