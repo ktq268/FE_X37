@@ -1,5 +1,5 @@
 // api.js (Đã sửa đổi hoàn chỉnh)
-const API_URL = "https://be-x37-eight.vercel.app";
+const API_URL = "https://be-x37-eight.vercel.app/api";
 
 // Hàm tiện ích để gọi API với error handling chuẩn hóa
 async function request(endpoint, options = {}, token = null) {
